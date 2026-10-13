@@ -81,7 +81,14 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, ge=1)
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=14, ge=1)
     OTP_EXPIRE_SECONDS: int = Field(default=300, ge=60)
-    OTP_MAX_ATTEMPTS: int = Field(default=5, ge=1)
+    OTP_MAX_ATTEMPTS: int = Field(default=5, ge=1)  # wrong guesses before a code is burned
+    OTP_LENGTH: int = Field(default=6, ge=4, le=8)
+    OTP_RESEND_COOLDOWN_SECONDS: int = Field(default=60, ge=0)  # per phone
+    OTP_MAX_SENDS_PER_HOUR: int = Field(default=5, ge=1)  # per phone
+    OTP_MAX_SENDS_PER_IP_PER_HOUR: int = Field(default=30, ge=1)  # per client IP
+    # Version of the terms / privacy policy users consent to (ON-2). Bump it when the
+    # policy changes; /auth/me then reports which consents need to be given again.
+    CONSENT_POLICY_VERSION: str = "2026-10-v1"
     # Fernet key for field-level encryption of health data (PRD HP-4).
     # Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     FIELD_ENCRYPTION_KEY: SecretStr | None = None
@@ -221,6 +228,18 @@ class Settings(BaseSettings):
     @property
     def is_test(self) -> bool:
         return self.ENVIRONMENT is Environment.TEST
+
+    @property
+    def expose_otp_in_response(self) -> bool:
+        """Return the OTP in API responses so web and mobile can test without a phone.
+
+        Only ever true for local development and tests running on the mock SMS client.
+        Staging and production never expose it, even with mocks switched on.
+        """
+        return (
+            self.ENVIRONMENT in (Environment.DEVELOPMENT, Environment.TEST)
+            and self.USE_MOCK_INTEGRATIONS
+        )
 
     @property
     def database_url(self) -> str:
