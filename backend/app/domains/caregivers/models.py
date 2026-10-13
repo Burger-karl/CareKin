@@ -235,4 +235,33 @@ class VerificationCheck(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )  # ops user
     completed_at: Mapped[datetime | None] = mapped_column()
 
-    caregiver:
+    caregiver: Mapped[Caregiver] = orm.relationship(
+        back_populates="verification_checks", lazy="raise"
+    )
+
+
+class AvailabilityWindow(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """A recurring weekly slot, optionally limited to a date range."""
+
+    __tablename__ = "availability_windows"
+    __table_args__ = (
+        CheckConstraint("start_time < end_time", name="start_before_end"),
+        CheckConstraint("day_of_week BETWEEN 0 AND 6", name="day_of_week_range"),
+        CheckConstraint(
+            "valid_to IS NULL OR valid_from IS NULL OR valid_to >= valid_from",
+            name="valid_range_ordered",
+        ),
+    )
+
+    caregiver_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("caregivers.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    day_of_week: Mapped[int] = mapped_column(SmallInteger, nullable=False)  # 0 = Monday
+    start_time: Mapped[time] = mapped_column(Time, nullable=False)
+    end_time: Mapped[time] = mapped_column(Time, nullable=False)
+    valid_from: Mapped[date | None] = mapped_column(Date)
+    valid_to: Mapped[date | None] = mapped_column(Date)
+
+    caregiver: Mapped[Caregiver] = orm.relationship(
+        back_populates="availability_windows", lazy="raise"
+    )
