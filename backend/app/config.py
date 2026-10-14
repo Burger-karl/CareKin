@@ -37,7 +37,7 @@ import binascii
 import json
 from enum import StrEnum
 from functools import lru_cache
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, PostgresDsn, RedisDsn, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -81,10 +81,19 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, ge=1)
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=14, ge=1)
     OTP_EXPIRE_SECONDS: int = Field(default=300, ge=60)
-    OTP_MAX_ATTEMPTS: int = Field(default=5, ge=1)
+    OTP_MAX_ATTEMPTS: int = Field(default=5, ge=1)  # wrong guesses before a code is burned
+    OTP_LENGTH: int = Field(default=6, ge=4, le=8)
+    OTP_RESEND_COOLDOWN_SECONDS: int = Field(default=60, ge=0)  # per phone
+    OTP_MAX_SENDS_PER_HOUR: int = Field(default=5, ge=1)  # per phone
+    OTP_MAX_SENDS_PER_IP_PER_HOUR: int = Field(default=30, ge=1)  # per client IP
+    # Version of the terms / privacy policy users consent to (ON-2). Bump it when the
+    # policy changes; /auth/me then reports which consents need to be given again.
+    CONSENT_POLICY_VERSION: str = "2026-10-v1"
     # Fernet key for field-level encryption of health data (PRD HP-4).
     # Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     FIELD_ENCRYPTION_KEY: SecretStr | None = None
+    # Old keys still accepted for reading during a key rotation (comma-separated).
+    FIELD_ENCRYPTION_PREVIOUS_KEYS: Annotated[list[SecretStr], NoDecode] = []
     # Comma-separated in .env, e.g. CORS_ORIGINS=http://localhost:3000,https://app.carekin.ng
     CORS_ORIGINS: Annotated[list[str], NoDecode] = [
         "http://localhost:3000",  # Next.js web
@@ -115,20 +124,51 @@ class Settings(BaseSettings):
     BACKGROUND_CHECK_API_KEY: SecretStr | None = None
     ESCROW_PARTNER_API_KEY: SecretStr | None = None
     PAYSTACK_SECRET_KEY: SecretStr | None = None
+    PAYSTACK_BASE_URL: str = "https://api.paystack.co"
     STRIPE_SECRET_KEY: SecretStr | None = None
     STRIPE_WEBHOOK_SECRET: SecretStr | None = None
+    # SMS carries OTPs and crisis alerts. Unset follows USE_MOCK_INTEGRATIONS (mock when
+    # true, termii when false). Production refuses "mock": a mocked crisis alert reaches nobody.
+    SMS_PROVIDER: Literal["mock", "termii"] | None = None
     SMS_PROVIDER_API_KEY: SecretStr | None = None
-    SMS_SENDER_ID: str = "CareKin"
+    # Termii base URLs are account-specific; copy it from the Termii dashboard.
+    SMS_PROVIDER_BASE_URL: str | None = None
+    # Must be an approved Termii sender ID: crisis alerts use the DND channel, which needs one.
+    SMS_SENDER_ID: str = Field(default="CareKin", min_length=3, max_length=11)
+    SMS_TIMEOUT_SECONDS: float = Field(default=10.0, gt=0)
     WHATSAPP_ACCESS_TOKEN: SecretStr | None = None
     WHATSAPP_PHONE_NUMBER_ID: str | None = None
     WHATSAPP_VERIFY_TOKEN: SecretStr | None = None
+    # Signs webhook calls from Meta (X-Hub-Signature-256). From the Meta app dashboard.
+    WHATSAPP_APP_SECRET: SecretStr | None = None
+    WHATSAPP_API_VERSION: str = "v21.0"
+    # Timeout for every partner HTTP call except SMS (which has its own).
+    INTEGRATION_TIMEOUT_SECONDS: float = Field(default=15.0, gt=0)
     LLM_API_KEY: SecretStr | None = None
+
+    # --------------------------------------------------------------- crisis
+    EMERGENCY_NUMBER: str = "112"  # shown in every crisis response (PRD CR-3)
+    CRISIS_FACILITY_RADIUS_KM: float = Field(default=50, gt=0)
+    # Searched once more, wider, if nothing verified is inside the normal radius.
+    CRISIS_FACILITY_FALLBACK_RADIUS_KM: float = Field(default=150, gt=0)
+    CRISIS_FACILITY_LIMIT: int = Field(default=5, ge=1, le=20)
+    # A GPS fix older than this when the button is pressed is flagged as stale.
+    CRISIS_LOCATION_STALE_SECONDS: int = Field(default=300, ge=30)
+    # A second press within this window returns the active event instead of a new one.
+    CRISIS_DUPLICATE_WINDOW_SECONDS: int = Field(default=600, ge=0)
+    CRISIS_ALERT_MAX_ATTEMPTS: int = Field(default=3, ge=1)
+    # Queued or failed alerts idle this long are picked up by the retry sweep.
+    CRISIS_ALERT_RETRY_AFTER_SECONDS: int = Field(default=30, ge=5)
 
     # -------------------------------------------------------------- storage
     S3_BUCKET: str | None = None
     AWS_REGION: str = "af-south-1"
     AWS_ACCESS_KEY_ID: str | None = None
     AWS_SECRET_ACCESS_KEY: SecretStr | None = None
+    # Set for S3-compatible storage (MinIO, Cloudflare R2); leave empty for AWS.
+    S3_ENDPOINT_URL: str | None = None
+    S3_PRESIGN_EXPIRY_SECONDS: int = Field(default=900, ge=60, le=3600)
+    S3_MAX_UPLOAD_BYTES: int = Field(default=10 * 1024 * 1024, ge=1024)
 
     # ----------------------------------------------------------- validators
     @field_validator("DATABASE_URL", mode="before")
@@ -177,6 +217,28 @@ class Settings(BaseSettings):
             )
         return value
 
+    @field_validator("FIELD_ENCRYPTION_PREVIOUS_KEYS", mode="before")
+    @classmethod
+    def _split_previous_keys(cls, value: Any) -> Any:
+        """Comma-separated in .env."""
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [key.strip() for key in value.split(",") if key.strip()]
+        return value
+
+    @field_validator("FIELD_ENCRYPTION_PREVIOUS_KEYS")
+    @classmethod
+    def _valid_previous_keys(cls, value: list[SecretStr]) -> list[SecretStr]:
+        for position, key in enumerate(value, start=1):
+            try:
+                cls._valid_fernet_key(key)
+            except ValueError:
+                raise ValueError(
+                    f"FIELD_ENCRYPTION_PREVIOUS_KEYS key {position} is not a Fernet key"
+                ) from None
+        return value
+
     @field_validator("LOG_LEVEL")
     @classmethod
     def _upper_log_level(cls, value: str) -> str:
@@ -202,6 +264,12 @@ class Settings(BaseSettings):
             problems.append("DEBUG must be false")
         if "*" in self.CORS_ORIGINS:
             problems.append("CORS_ORIGINS must list explicit origins, not '*'")
+        if self.is_production and self.sms_provider == "mock":
+            problems.append("SMS must not be mocked in production: crisis alerts would not send")
+        if self.sms_provider == "termii" and not (
+            self.SMS_PROVIDER_API_KEY and self.SMS_PROVIDER_BASE_URL
+        ):
+            problems.append("Termii SMS needs SMS_PROVIDER_API_KEY and SMS_PROVIDER_BASE_URL")
         if problems:
             raise ValueError(
                 f"Unsafe configuration for ENVIRONMENT={self.ENVIRONMENT.value}: "
@@ -221,6 +289,24 @@ class Settings(BaseSettings):
     @property
     def is_test(self) -> bool:
         return self.ENVIRONMENT is Environment.TEST
+
+    @property
+    def expose_otp_in_response(self) -> bool:
+        """Return the OTP in API responses so web and mobile can test without a phone.
+
+        Only ever true for local development and tests running on the mock SMS client.
+        Staging and production never expose it, even with mocks switched on.
+        """
+        return (
+            self.ENVIRONMENT in (Environment.DEVELOPMENT, Environment.TEST)
+            and self.USE_MOCK_INTEGRATIONS
+        )
+
+    @property
+    def sms_provider(self) -> Literal["mock", "termii"]:
+        if self.SMS_PROVIDER is not None:
+            return self.SMS_PROVIDER
+        return "mock" if self.USE_MOCK_INTEGRATIONS else "termii"
 
     @property
     def database_url(self) -> str:

@@ -1,1 +1,1 @@
-"""patients: Patient, Guardian, CareProfile."""
+"""patients: Patient, Guardian, EmergencyContact, CareProfile, FamilyLink."""
