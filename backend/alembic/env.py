@@ -33,6 +33,15 @@ DATABASE_URL = (
 )
 
 
+def _include_object(obj, name, type_, reflected, compare_to) -> bool:
+    # Ignore database tables we don't model. The postgis/postgis image installs the
+    # TIGER geocoder (zip_lookup, edges, ...), which would otherwise look like
+    # tables to drop and fail `alembic check`.
+    if type_ == "table" and reflected and compare_to is None:
+        return False
+    return alembic_helpers.include_object(obj, name, type_, reflected, compare_to)
+
+
 def _configure(**kwargs) -> None:
     context.configure(
         target_metadata=target_metadata,
@@ -40,7 +49,7 @@ def _configure(**kwargs) -> None:
         compare_server_default=True,
         # PostGIS: skip its internal tables, render Geography/Geometry types,
         # and create spatial indexes correctly.
-        include_object=alembic_helpers.include_object,
+        include_object=_include_object,
         process_revision_directives=alembic_helpers.writer,
         render_item=alembic_helpers.render_item,
         **kwargs,
