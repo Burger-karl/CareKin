@@ -26,6 +26,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Dialect
@@ -131,12 +132,12 @@ class Guardian(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         ForeignKey("users.id", ondelete="RESTRICT"), index=True
     )
     relationship: Mapped[str] = mapped_column(String(50))  # parent, sibling, spouse
-    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     can_approve_caregivers: Mapped[bool] = mapped_column(  # TS-3
-        Boolean, default=True, server_default="true"
+        Boolean, default=True, server_default=text("true")
     )
     receives_crisis_alerts: Mapped[bool] = mapped_column(  # CR-1
-        Boolean, default=True, server_default="true"
+        Boolean, default=True, server_default=text("true")
     )
 
 
@@ -157,7 +158,7 @@ class EmergencyContact(UUIDPrimaryKeyMixin, Base):
         server_default=AlertChannel.SMS.value,
     )
     priority: Mapped[int] = mapped_column(  # alert order, 1 first
-        SmallInteger, default=1, server_default="1"
+        SmallInteger, default=1, server_default=text("1")
     )
 
 
@@ -175,9 +176,9 @@ class CareProfile(UUIDPrimaryKeyMixin, Base):
     )
     allergies: Mapped[str | None] = mapped_column(EncryptedText)
     care_instructions: Mapped[str | None] = mapped_column(EncryptedText)
-    primary_facility_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("facilities.id", ondelete="SET NULL"), index=True
-    )
+    # No FK yet: the facilities table doesn't exist. The facilities migration should add
+    # fk_care_profiles_primary_facility_id_facilities (ON DELETE SET NULL).
+    primary_facility_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
     updated_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
@@ -199,5 +200,7 @@ class FamilyLink(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         ForeignKey("users.id", ondelete="RESTRICT"), index=True
     )
     # What the patient lets them see, e.g. {"health_data": true, "location": false}.
-    share_scope: Mapped[dict[str, bool]] = mapped_column(JSONB, default=dict, server_default="{}")
-    can_fund: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    share_scope: Mapped[dict[str, bool]] = mapped_column(
+        JSONB, default=dict, server_default=text("'{}'::jsonb")
+    )
+    can_fund: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))

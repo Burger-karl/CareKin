@@ -14,8 +14,8 @@ A patient with no login, or a minor, always keeps a primary guardian (ON-3).
 Every write, and every read that returns health data, adds an audit_logs row
 in the same transaction (HP-4). Metadata records which fields changed, never values.
 
-TODO(ON-2): refuse health-data writes without a granted `health_data` consent
-once auth's ConsentRecord exists.
+Writing health data (genotype, blood group, care profile) needs the caller's
+`health_data` consent (ON-2).
 """
 
 from __future__ import annotations
@@ -25,14 +25,17 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from fastapi import Request
 from geoalchemy2.elements import WKBElement, WKTElement
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import audit
-from app.core.audit import AuditContext
-from app.core.exceptions import CareKinError
+from app.core.audit import write_audit
+from app.core.exceptions import CareKinError, ConflictError, ForbiddenError, NotFoundError
+from app.core.permissions import UserRole
+from app.domains.auth.models import ConsentType
+from app.domains.auth.service import has_consent
 from app.domains.patients.models import (
     ADULT_AGE,
     CareProfile,
@@ -57,24 +60,68 @@ from app.domains.patients.schemas import (
 
 
 # ---------------------------------------------------------------- errors
-class PatientError(CareKinError):
-    """Base for patients-domain errors."""
-
-
-class PatientNotFound(PatientError):
+class PatientNotFound(NotFoundError):
     """Doesn't exist, or the caller has no access to it."""
 
+    code = "patient_not_found"
 
-class PatientAccessDenied(PatientError):
+
+class PatientAccessDenied(ForbiddenError):
     """The caller can see the patient but may not do this."""
 
+    code = "patient_forbidden"
 
-class PatientConflict(PatientError):
+
+class PatientConflict(ConflictError):
     """Clashes with an existing row or references one that doesn't exist."""
 
+    code = "patient_conflict"
 
-class PatientRuleViolation(PatientError):
+
+class PatientRuleViolation(CareKinError):
     """Breaks a business rule, e.g. removing a minor's last primary guardian."""
+
+    status_code = 422
+    code = "patient_rule_violation"
+
+
+# ---------------------------------------------------------------- actor
+@dataclass(frozen=True)
+class Actor:
+    """The caller. `request` supplies IP and user agent for the audit log."""
+
+    user_id: uuid.UUID
+    role: UserRole
+    request: Request | None = None
+
+
+def _audit(
+    db: AsyncSession,
+    actor: Actor,
+    action: str,
+    entity_type: str,
+    entity_id: uuid.UUID,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    write_audit(
+        db,
+        action=action,
+        actor_id=actor.user_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        request=actor.request,
+        metadata=metadata,
+    )
+
+
+async def _require_health_consent(db: AsyncSession, actor: Actor) -> None:
+    """ON-2: no health data is stored until the caller has consented."""
+    if not await has_consent(db, actor.user_id, ConsentType.HEALTH_DATA):
+        raise ForbiddenError(
+            "Consent is required before this information can be stored.",
+            code="consent_required",
+            details={"consent_type": ConsentType.HEALTH_DATA.value, "next": "/auth/consent"},
+        )
 
 
 # ---------------------------------------------------------------- access
@@ -173,7 +220,7 @@ async def _commit(db: AsyncSession) -> None:
         await db.rollback()
         sqlstate = getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None)
         if sqlstate == "23503":
-            raise PatientConflict("A referenced user or facility doesn't exist") from exc
+            raise PatientConflict("A referenced user doesn't exist") from exc
         if sqlstate == "23505":
             raise PatientConflict("That record already exists") from exc
         raise PatientConflict("The change conflicts with existing data") from exc
@@ -200,7 +247,7 @@ def to_read(access: PatientAccess) -> PatientRead:
 
 
 # ---------------------------------------------------------------- patients
-async def create_patient(db: AsyncSession, actor: AuditContext, data: PatientCreate) -> PatientRead:
+async def create_patient(db: AsyncSession, actor: Actor, data: PatientCreate) -> PatientRead:
     patient = Patient(
         user_id=actor.user_id if data.for_self else None,
         full_name=data.full_name,
@@ -211,6 +258,15 @@ async def create_patient(db: AsyncSession, actor: AuditContext, data: PatientCre
         home_location=_to_wkt(data.home_location),
         created_by=actor.user_id,
     )
+    expected_role = UserRole.PATIENT if data.for_self else UserRole.GUARDIAN
+    if actor.role is not expected_role:
+        raise PatientAccessDenied(
+            "Only patient accounts register themselves"
+            if data.for_self
+            else "Only guardian accounts register a patient for someone else"
+        )
+    if data.genotype is not None or data.blood_group is not None:
+        await _require_health_consent(db, actor)
     if data.for_self:
         if patient.is_minor:
             raise PatientRuleViolation(
@@ -232,14 +288,14 @@ async def create_patient(db: AsyncSession, actor: AuditContext, data: PatientCre
                 receives_crisis_alerts=True,
             )
         )
-    audit.record(db, actor, "patient.create", "patient", patient.id, {"for_self": data.for_self})
+    _audit(db, actor, "patient.create", "patient", patient.id, {"for_self": data.for_self})
     await _commit(db)
     await db.refresh(patient)
     role: Role = "self" if data.for_self else "guardian"
     return to_read(PatientAccess(patient, role, is_primary_guardian=not data.for_self))
 
 
-async def list_patients(db: AsyncSession, actor: AuditContext) -> list[PatientRead]:
+async def list_patients(db: AsyncSession, actor: Actor) -> list[PatientRead]:
     """Every patient the caller can see: their own record, then guardianships, then family links."""
     accesses: list[PatientAccess] = []
     own = await db.scalar(select(Patient).where(Patient.user_id == actor.user_id))
@@ -263,26 +319,28 @@ async def list_patients(db: AsyncSession, actor: AuditContext) -> list[PatientRe
         accesses.append(PatientAccess(patient, "family", share_scope=dict(scope or {})))
     for access in accesses:
         if access.sees_health_data:
-            audit.record(db, actor, "patient.view", "patient", access.patient.id)
+            _audit(db, actor, "patient.view", "patient", access.patient.id)
     await _commit(db)
     return [to_read(access) for access in accesses]
 
 
-async def get_patient(db: AsyncSession, actor: AuditContext, patient_id: uuid.UUID) -> PatientRead:
+async def get_patient(db: AsyncSession, actor: Actor, patient_id: uuid.UUID) -> PatientRead:
     access = await get_access(db, patient_id, actor.user_id)
     if access.sees_health_data:
-        audit.record(db, actor, "patient.view", "patient", patient_id)
+        _audit(db, actor, "patient.view", "patient", patient_id)
         await _commit(db)
     return to_read(access)
 
 
 async def update_patient(
-    db: AsyncSession, actor: AuditContext, patient_id: uuid.UUID, data: PatientUpdate
+    db: AsyncSession, actor: Actor, patient_id: uuid.UUID, data: PatientUpdate
 ) -> PatientRead:
     access = await get_access(db, patient_id, actor.user_id)
     _require_edit(access)
     patient = access.patient
     changes = data.model_dump(exclude_unset=True)
+    if {"genotype", "blood_group"} & changes.keys():
+        await _require_health_consent(db, actor)
     if "home_location" in changes:
         changes["home_location"] = _to_wkt(data.home_location)
     for name, value in changes.items():
@@ -294,7 +352,7 @@ async def update_patient(
     ):
         await db.rollback()
         raise PatientRuleViolation("A minor must have a primary guardian before this change")
-    audit.record(db, actor, "patient.update", "patient", patient_id, {"fields": sorted(changes)})
+    _audit(db, actor, "patient.update", "patient", patient_id, {"fields": sorted(changes)})
     await _commit(db)
     await db.refresh(patient)
     return to_read(access)
@@ -330,9 +388,7 @@ async def _get_guardian(
     return guardian
 
 
-async def list_guardians(
-    db: AsyncSession, actor: AuditContext, patient_id: uuid.UUID
-) -> list[Guardian]:
+async def list_guardians(db: AsyncSession, actor: Actor, patient_id: uuid.UUID) -> list[Guardian]:
     _require_edit(await get_access(db, patient_id, actor.user_id))
     result = await db.scalars(
         select(Guardian)
@@ -343,7 +399,7 @@ async def list_guardians(
 
 
 async def add_guardian(
-    db: AsyncSession, actor: AuditContext, patient_id: uuid.UUID, data: GuardianCreate
+    db: AsyncSession, actor: Actor, patient_id: uuid.UUID, data: GuardianCreate
 ) -> Guardian:
     access = await get_access(db, patient_id, actor.user_id)
     _require_manage(access)
@@ -353,9 +409,7 @@ async def add_guardian(
     db.add(guardian)
     if guardian.is_primary:
         await _demote_other_primaries(db, patient_id, keep=guardian.id)
-    audit.record(
-        db, actor, "guardian.add", "guardian", guardian.id, {"patient_id": str(patient_id)}
-    )
+    _audit(db, actor, "guardian.add", "guardian", guardian.id, {"patient_id": str(patient_id)})
     await _commit(db)
     await db.refresh(guardian)
     return guardian
@@ -363,7 +417,7 @@ async def add_guardian(
 
 async def update_guardian(
     db: AsyncSession,
-    actor: AuditContext,
+    actor: Actor,
     patient_id: uuid.UUID,
     guardian_id: uuid.UUID,
     data: GuardianUpdate,
@@ -385,7 +439,7 @@ async def update_guardian(
         setattr(guardian, name, value)
     if changes.get("is_primary"):
         await _demote_other_primaries(db, patient_id, keep=guardian.id)
-    audit.record(
+    _audit(
         db,
         actor,
         "guardian.update",
@@ -399,7 +453,7 @@ async def update_guardian(
 
 
 async def remove_guardian(
-    db: AsyncSession, actor: AuditContext, patient_id: uuid.UUID, guardian_id: uuid.UUID
+    db: AsyncSession, actor: Actor, patient_id: uuid.UUID, guardian_id: uuid.UUID
 ) -> None:
     access = await get_access(db, patient_id, actor.user_id)
     _require_manage(access)
@@ -413,9 +467,7 @@ async def remove_guardian(
             "This is the only primary guardian. Make someone else primary first"
         )
     await db.delete(guardian)
-    audit.record(
-        db, actor, "guardian.remove", "guardian", guardian.id, {"patient_id": str(patient_id)}
-    )
+    _audit(db, actor, "guardian.remove", "guardian", guardian.id, {"patient_id": str(patient_id)})
     await _commit(db)
 
 
@@ -430,7 +482,7 @@ async def _get_contact(
 
 
 async def list_emergency_contacts(
-    db: AsyncSession, actor: AuditContext, patient_id: uuid.UUID
+    db: AsyncSession, actor: Actor, patient_id: uuid.UUID
 ) -> list[EmergencyContact]:
     _require_edit(await get_access(db, patient_id, actor.user_id))
     result = await db.scalars(
@@ -442,12 +494,12 @@ async def list_emergency_contacts(
 
 
 async def add_emergency_contact(
-    db: AsyncSession, actor: AuditContext, patient_id: uuid.UUID, data: EmergencyContactCreate
+    db: AsyncSession, actor: Actor, patient_id: uuid.UUID, data: EmergencyContactCreate
 ) -> EmergencyContact:
     _require_edit(await get_access(db, patient_id, actor.user_id))
     contact = EmergencyContact(patient_id=patient_id, **data.model_dump())
     db.add(contact)
-    audit.record(
+    _audit(
         db,
         actor,
         "emergency_contact.add",
@@ -461,7 +513,7 @@ async def add_emergency_contact(
 
 async def update_emergency_contact(
     db: AsyncSession,
-    actor: AuditContext,
+    actor: Actor,
     patient_id: uuid.UUID,
     contact_id: uuid.UUID,
     data: EmergencyContactUpdate,
@@ -471,7 +523,7 @@ async def update_emergency_contact(
     changes = data.model_dump(exclude_none=True)
     for name, value in changes.items():
         setattr(contact, name, value)
-    audit.record(
+    _audit(
         db,
         actor,
         "emergency_contact.update",
@@ -484,12 +536,12 @@ async def update_emergency_contact(
 
 
 async def remove_emergency_contact(
-    db: AsyncSession, actor: AuditContext, patient_id: uuid.UUID, contact_id: uuid.UUID
+    db: AsyncSession, actor: Actor, patient_id: uuid.UUID, contact_id: uuid.UUID
 ) -> None:
     _require_edit(await get_access(db, patient_id, actor.user_id))
     contact = await _get_contact(db, patient_id, contact_id)
     await db.delete(contact)
-    audit.record(
+    _audit(
         db,
         actor,
         "emergency_contact.remove",
@@ -501,16 +553,14 @@ async def remove_emergency_contact(
 
 
 # ---------------------------------------------------------------- care profile
-async def get_care_profile(
-    db: AsyncSession, actor: AuditContext, patient_id: uuid.UUID
-) -> CareProfile:
+async def get_care_profile(db: AsyncSession, actor: Actor, patient_id: uuid.UUID) -> CareProfile:
     access = await get_access(db, patient_id, actor.user_id)
     if not access.sees_health_data:
         raise PatientAccessDenied("The patient hasn't shared their care profile with you")
     profile = await db.scalar(select(CareProfile).where(CareProfile.patient_id == patient_id))
     if profile is None:
         raise PatientNotFound("This patient has no care profile yet")
-    audit.record(
+    _audit(
         db, actor, "care_profile.view", "care_profile", profile.id, {"patient_id": str(patient_id)}
     )
     await _commit(db)
@@ -518,9 +568,10 @@ async def get_care_profile(
 
 
 async def put_care_profile(
-    db: AsyncSession, actor: AuditContext, patient_id: uuid.UUID, data: CareProfileWrite
+    db: AsyncSession, actor: Actor, patient_id: uuid.UUID, data: CareProfileWrite
 ) -> CareProfile:
     _require_edit(await get_access(db, patient_id, actor.user_id))
+    await _require_health_consent(db, actor)
     profile = await db.scalar(select(CareProfile).where(CareProfile.patient_id == patient_id))
     if profile is None:
         profile = CareProfile(patient_id=patient_id)
@@ -528,7 +579,7 @@ async def put_care_profile(
     for name, value in data.model_dump().items():
         setattr(profile, name, value)
     profile.updated_by = actor.user_id
-    audit.record(
+    _audit(
         db,
         actor,
         "care_profile.update",
@@ -550,7 +601,7 @@ async def _get_link(db: AsyncSession, patient_id: uuid.UUID, link_id: uuid.UUID)
 
 
 async def list_family_links(
-    db: AsyncSession, actor: AuditContext, patient_id: uuid.UUID
+    db: AsyncSession, actor: Actor, patient_id: uuid.UUID
 ) -> list[FamilyLink]:
     _require_manage(await get_access(db, patient_id, actor.user_id))
     result = await db.scalars(
@@ -562,7 +613,7 @@ async def list_family_links(
 
 
 async def add_family_link(
-    db: AsyncSession, actor: AuditContext, patient_id: uuid.UUID, data: FamilyLinkCreate
+    db: AsyncSession, actor: Actor, patient_id: uuid.UUID, data: FamilyLinkCreate
 ) -> FamilyLink:
     access = await get_access(db, patient_id, actor.user_id)
     _require_manage(access)
@@ -570,7 +621,7 @@ async def add_family_link(
         raise PatientRuleViolation("A patient can't be linked to themselves")
     link = FamilyLink(patient_id=patient_id, **data.model_dump())
     db.add(link)
-    audit.record(
+    _audit(
         db,
         actor,
         "family_link.add",
@@ -585,7 +636,7 @@ async def add_family_link(
 
 async def update_family_link(
     db: AsyncSession,
-    actor: AuditContext,
+    actor: Actor,
     patient_id: uuid.UUID,
     link_id: uuid.UUID,
     data: FamilyLinkUpdate,
@@ -595,7 +646,7 @@ async def update_family_link(
     changes = data.model_dump(exclude_none=True)
     for name, value in changes.items():
         setattr(link, name, value)
-    audit.record(
+    _audit(
         db,
         actor,
         "family_link.update",
@@ -609,12 +660,10 @@ async def update_family_link(
 
 
 async def remove_family_link(
-    db: AsyncSession, actor: AuditContext, patient_id: uuid.UUID, link_id: uuid.UUID
+    db: AsyncSession, actor: Actor, patient_id: uuid.UUID, link_id: uuid.UUID
 ) -> None:
     _require_manage(await get_access(db, patient_id, actor.user_id))
     link = await _get_link(db, patient_id, link_id)
     await db.delete(link)
-    audit.record(
-        db, actor, "family_link.remove", "family_link", link.id, {"patient_id": str(patient_id)}
-    )
+    _audit(db, actor, "family_link.remove", "family_link", link.id, {"patient_id": str(patient_id)})
     await _commit(db)

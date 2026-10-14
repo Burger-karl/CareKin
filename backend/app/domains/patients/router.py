@@ -1,19 +1,17 @@
-"""patients routes: Patient, Guardian, EmergencyContact, CareProfile, FamilyLink."""
+"""patients routes: Patient, Guardian, EmergencyContact, CareProfile, FamilyLink.
+
+Errors are CareKinError subclasses, rendered by app.core.exceptions.
+"""
 
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterator
-from contextlib import contextmanager
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+from fastapi import APIRouter, Depends, Request, Response, status
 
-from app.config import settings
-from app.core.audit import AuditContext
 from app.database import DbSession
+from app.domains.auth.dependencies import CurrentUser
 from app.domains.patients import service
 from app.domains.patients.schemas import (
     CareProfileRead,
@@ -34,65 +32,12 @@ from app.domains.patients.schemas import (
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
-_bearer = HTTPBearer(auto_error=False)
+
+def get_actor(request: Request, user: CurrentUser) -> service.Actor:
+    return service.Actor(user_id=user.id, role=user.role, request=request)
 
 
-async def get_current_user_id(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
-) -> uuid.UUID:
-    """The caller's user id, from the access token's `sub` claim.
-
-    TODO: replace with the auth domain's current-user dependency once it exists.
-    Tokens are verified with the same SECRET_KEY and JWT_ALGORITHM settings auth will use.
-    """
-    unauthorized = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Not authenticated",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    if credentials is None:
-        raise unauthorized
-    try:
-        claims = jwt.decode(
-            credentials.credentials,
-            settings.SECRET_KEY.get_secret_value(),
-            algorithms=[settings.JWT_ALGORITHM],
-        )
-        return uuid.UUID(str(claims["sub"]))
-    except (JWTError, KeyError, ValueError) as exc:
-        raise unauthorized from exc
-
-
-CurrentUserId = Annotated[uuid.UUID, Depends(get_current_user_id)]
-
-
-def get_actor(request: Request, user_id: CurrentUserId) -> AuditContext:
-    """The caller plus where they're calling from, for the audit log."""
-    return AuditContext.from_request(
-        user_id,
-        request.client.host if request.client else None,
-        request.headers.get("user-agent"),
-    )
-
-
-Actor = Annotated[AuditContext, Depends(get_actor)]
-
-_STATUS_FOR_ERROR: dict[type[service.PatientError], int] = {
-    service.PatientNotFound: status.HTTP_404_NOT_FOUND,
-    service.PatientAccessDenied: status.HTTP_403_FORBIDDEN,
-    service.PatientConflict: status.HTTP_409_CONFLICT,
-    service.PatientRuleViolation: 422,
-}
-
-
-@contextmanager
-def _http_errors() -> Iterator[None]:
-    """Translate service errors into HTTP responses."""
-    try:
-        yield
-    except service.PatientError as exc:
-        code = _STATUS_FOR_ERROR.get(type(exc), status.HTTP_400_BAD_REQUEST)
-        raise HTTPException(status_code=code, detail=str(exc)) from exc
+Actor = Annotated[service.Actor, Depends(get_actor)]
 
 
 # ---------------------------------------------------------------- patients
@@ -104,35 +49,30 @@ async def list_patients(db: DbSession, actor: Actor):
 
 @router.post("", response_model=PatientRead, status_code=status.HTTP_201_CREATED)
 async def create_patient(data: PatientCreate, db: DbSession, actor: Actor):
-    with _http_errors():
-        return await service.create_patient(db, actor, data)
+    return await service.create_patient(db, actor, data)
 
 
 @router.get("/{patient_id}", response_model=PatientRead)
 async def get_patient(patient_id: uuid.UUID, db: DbSession, actor: Actor):
-    with _http_errors():
-        return await service.get_patient(db, actor, patient_id)
+    return await service.get_patient(db, actor, patient_id)
 
 
 @router.patch("/{patient_id}", response_model=PatientRead)
 async def update_patient(patient_id: uuid.UUID, data: PatientUpdate, db: DbSession, actor: Actor):
-    with _http_errors():
-        return await service.update_patient(db, actor, patient_id, data)
+    return await service.update_patient(db, actor, patient_id, data)
 
 
 # ---------------------------------------------------------------- guardians
 @router.get("/{patient_id}/guardians", response_model=list[GuardianRead])
 async def list_guardians(patient_id: uuid.UUID, db: DbSession, actor: Actor):
-    with _http_errors():
-        return await service.list_guardians(db, actor, patient_id)
+    return await service.list_guardians(db, actor, patient_id)
 
 
 @router.post(
     "/{patient_id}/guardians", response_model=GuardianRead, status_code=status.HTTP_201_CREATED
 )
 async def add_guardian(patient_id: uuid.UUID, data: GuardianCreate, db: DbSession, actor: Actor):
-    with _http_errors():
-        return await service.add_guardian(db, actor, patient_id, data)
+    return await service.add_guardian(db, actor, patient_id, data)
 
 
 @router.patch("/{patient_id}/guardians/{guardian_id}", response_model=GuardianRead)
@@ -143,24 +83,21 @@ async def update_guardian(
     db: DbSession,
     actor: Actor,
 ):
-    with _http_errors():
-        return await service.update_guardian(db, actor, patient_id, guardian_id, data)
+    return await service.update_guardian(db, actor, patient_id, guardian_id, data)
 
 
 @router.delete("/{patient_id}/guardians/{guardian_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_guardian(
     patient_id: uuid.UUID, guardian_id: uuid.UUID, db: DbSession, actor: Actor
 ):
-    with _http_errors():
-        await service.remove_guardian(db, actor, patient_id, guardian_id)
+    await service.remove_guardian(db, actor, patient_id, guardian_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ---------------------------------------------------------------- emergency contacts
 @router.get("/{patient_id}/emergency-contacts", response_model=list[EmergencyContactRead])
 async def list_emergency_contacts(patient_id: uuid.UUID, db: DbSession, actor: Actor):
-    with _http_errors():
-        return await service.list_emergency_contacts(db, actor, patient_id)
+    return await service.list_emergency_contacts(db, actor, patient_id)
 
 
 @router.post(
@@ -171,8 +108,7 @@ async def list_emergency_contacts(patient_id: uuid.UUID, db: DbSession, actor: A
 async def add_emergency_contact(
     patient_id: uuid.UUID, data: EmergencyContactCreate, db: DbSession, actor: Actor
 ):
-    with _http_errors():
-        return await service.add_emergency_contact(db, actor, patient_id, data)
+    return await service.add_emergency_contact(db, actor, patient_id, data)
 
 
 @router.patch("/{patient_id}/emergency-contacts/{contact_id}", response_model=EmergencyContactRead)
@@ -183,8 +119,7 @@ async def update_emergency_contact(
     db: DbSession,
     actor: Actor,
 ):
-    with _http_errors():
-        return await service.update_emergency_contact(db, actor, patient_id, contact_id, data)
+    return await service.update_emergency_contact(db, actor, patient_id, contact_id, data)
 
 
 @router.delete(
@@ -193,16 +128,14 @@ async def update_emergency_contact(
 async def remove_emergency_contact(
     patient_id: uuid.UUID, contact_id: uuid.UUID, db: DbSession, actor: Actor
 ):
-    with _http_errors():
-        await service.remove_emergency_contact(db, actor, patient_id, contact_id)
+    await service.remove_emergency_contact(db, actor, patient_id, contact_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ---------------------------------------------------------------- care profile
 @router.get("/{patient_id}/care-profile", response_model=CareProfileRead)
 async def get_care_profile(patient_id: uuid.UUID, db: DbSession, actor: Actor):
-    with _http_errors():
-        return await service.get_care_profile(db, actor, patient_id)
+    return await service.get_care_profile(db, actor, patient_id)
 
 
 @router.put("/{patient_id}/care-profile", response_model=CareProfileRead)
@@ -210,15 +143,13 @@ async def put_care_profile(
     patient_id: uuid.UUID, data: CareProfileWrite, db: DbSession, actor: Actor
 ):
     """Create or fully replace the care profile."""
-    with _http_errors():
-        return await service.put_care_profile(db, actor, patient_id, data)
+    return await service.put_care_profile(db, actor, patient_id, data)
 
 
 # ---------------------------------------------------------------- family links
 @router.get("/{patient_id}/family-links", response_model=list[FamilyLinkRead])
 async def list_family_links(patient_id: uuid.UUID, db: DbSession, actor: Actor):
-    with _http_errors():
-        return await service.list_family_links(db, actor, patient_id)
+    return await service.list_family_links(db, actor, patient_id)
 
 
 @router.post(
@@ -229,8 +160,7 @@ async def list_family_links(patient_id: uuid.UUID, db: DbSession, actor: Actor):
 async def add_family_link(
     patient_id: uuid.UUID, data: FamilyLinkCreate, db: DbSession, actor: Actor
 ):
-    with _http_errors():
-        return await service.add_family_link(db, actor, patient_id, data)
+    return await service.add_family_link(db, actor, patient_id, data)
 
 
 @router.patch("/{patient_id}/family-links/{link_id}", response_model=FamilyLinkRead)
@@ -241,14 +171,12 @@ async def update_family_link(
     db: DbSession,
     actor: Actor,
 ):
-    with _http_errors():
-        return await service.update_family_link(db, actor, patient_id, link_id, data)
+    return await service.update_family_link(db, actor, patient_id, link_id, data)
 
 
 @router.delete("/{patient_id}/family-links/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_family_link(
     patient_id: uuid.UUID, link_id: uuid.UUID, db: DbSession, actor: Actor
 ):
-    with _http_errors():
-        await service.remove_family_link(db, actor, patient_id, link_id)
+    await service.remove_family_link(db, actor, patient_id, link_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

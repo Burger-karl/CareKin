@@ -1,96 +1,51 @@
-"""Tests: Patients, guardians, emergency contacts, care profile, family links.
+"""Tests: Patients, guardians, emergency contacts, care profile, family links (ERD 2.2).
 
-These run without a database: the service layer is stubbed at the HTTP boundary.
+End-to-end tests run against real Postgres/PostGIS through the API, with users
+created by the auth flow. Unit tests at the top need no database.
 """
 
-import asyncio
 import struct
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from cryptography.fernet import Fernet
 from geoalchemy2.elements import WKBElement
-from jose import jwt
 from pydantic import ValidationError
+from sqlalchemy import select, text
 
-from app.config import settings
-from app.core.audit import AuditContext, AuditLog
-from app.database import get_db
+from app.core.audit import AuditLog
+from app.core.permissions import UserRole
+from app.core.security import create_access_token
+from app.domains.auth.models import User
 from app.domains.patients import models, schemas, service
-from app.main import app
-
-API = f"{settings.API_V1_PREFIX}/patients"
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def fernet(monkeypatch):
+    """Tests don't set FIELD_ENCRYPTION_KEY; use a throwaway key."""
     key = Fernet(Fernet.generate_key())
     monkeypatch.setattr(models, "_fernet", lambda: key)
     return key
 
 
-@pytest.fixture
-def no_db():
-    async def _no_db():
-        yield None
-
-    app.dependency_overrides[get_db] = _no_db
-    yield
-    app.dependency_overrides.pop(get_db, None)
-
-
-@pytest.fixture
-def user_id():
-    return uuid.uuid4()
-
-
-@pytest.fixture
-def auth(user_id):
-    token = jwt.encode(
-        {"sub": str(user_id)},
-        settings.SECRET_KEY.get_secret_value(),
-        algorithm=settings.JWT_ALGORITHM,
-    )
-    return {"Authorization": f"Bearer {token}"}
+def _dob(age_years: int) -> str:
+    """Date of birth for someone who turned `age_years` a few days ago."""
+    day = datetime.now(UTC).date() - timedelta(days=3)
+    try:
+        return day.replace(year=day.year - age_years).isoformat()
+    except ValueError:  # 29 February
+        return day.replace(year=day.year - age_years, day=28).isoformat()
 
 
 def _patient(age_years: int) -> models.Patient:
-    """A patient who turned `age_years` a few days ago."""
-    today = datetime.now(UTC).date() - timedelta(days=3)
-    try:
-        dob = today.replace(year=today.year - age_years)
-    except ValueError:  # 29 February
-        dob = today.replace(year=today.year - age_years, day=28)
-    return models.Patient(full_name="Test", date_of_birth=dob)
+    return models.Patient(
+        full_name="Test", date_of_birth=datetime.fromisoformat(_dob(age_years)).date()
+    )
 
 
-class FakeSession:
-    """Collects what a service adds, without a database."""
-
-    def __init__(self, scalar=None):
-        self.added = []
-        self.commits = 0
-        self._scalar = scalar
-
-    def add(self, obj):
-        self.added.append(obj)
-
-    async def scalar(self, query):
-        return self._scalar
-
-    async def commit(self):
-        self.commits += 1
-
-    async def refresh(self, obj):
-        pass
-
-    def audit_entries(self):
-        return [obj for obj in self.added if isinstance(obj, AuditLog)]
-
-
-# ---------------------------------------------------------------- encryption
-def test_encrypted_text_round_trip(fernet):
+# ================================================================ unit tests
+def test_encrypted_text_round_trip():
     column = models.EncryptedText()
     stored = column.process_bind_param("SS", None)
     assert stored != b"SS"
@@ -98,7 +53,7 @@ def test_encrypted_text_round_trip(fernet):
     assert column.process_bind_param(None, None) is None
 
 
-def test_encrypted_text_wrong_key_fails(fernet, monkeypatch):
+def test_encrypted_text_wrong_key_fails(monkeypatch):
     stored = models.EncryptedText().process_bind_param("SS", None)
     other = Fernet(Fernet.generate_key())
     monkeypatch.setattr(models, "_fernet", lambda: other)
@@ -106,7 +61,6 @@ def test_encrypted_text_wrong_key_fails(fernet, monkeypatch):
         models.EncryptedText().process_result_value(stored, None)
 
 
-# ---------------------------------------------------------------- location
 @pytest.mark.parametrize(
     "raw",
     [
@@ -120,7 +74,6 @@ def test_point_from_wkb(raw):
     assert (point.latitude, point.longitude) == (6.52, 3.35)
 
 
-# ---------------------------------------------------------------- schemas
 @pytest.mark.parametrize(
     ("schema", "data"),
     [
@@ -147,193 +100,285 @@ def test_invalid_input_rejected(schema, data):
         schema(**data)
 
 
-def test_patient_create_normalises():
-    data = schemas.PatientCreate(full_name=" Ada ", date_of_birth="2000-01-01", genotype="ss")
-    assert data.full_name == "Ada"
-    assert data.genotype == "SS"
-
-
-def test_patient_update_allows_clearing_optional_fields():
-    data = schemas.PatientUpdate(genotype=None)
-    assert data.model_dump(exclude_unset=True) == {"genotype": None}
-
-
-# ---------------------------------------------------------------- access rules
 def test_minor_status_is_derived():
     assert _patient(10).is_minor
     assert not _patient(30).is_minor
     assert _patient(30).age == 30
 
 
-def test_adult_self_manages_access_but_minor_does_not():
-    assert service.PatientAccess(_patient(30), "self").can_manage_access
-    assert not service.PatientAccess(_patient(10), "self").can_manage_access
+def test_access_rules():
+    adult, kid = _patient(30), _patient(10)
+    assert service.PatientAccess(adult, "self").can_manage_access
+    assert not service.PatientAccess(kid, "self").can_manage_access
+    assert not service.PatientAccess(kid, "guardian").can_manage_access
+    assert service.PatientAccess(kid, "guardian", is_primary_guardian=True).can_manage_access
+    family = service.PatientAccess(adult, "family", share_scope={"location": True})
+    assert not family.can_edit
+    assert not family.sees_health_data
+    assert family.sees_location
 
 
-def test_only_primary_guardian_manages_access():
-    patient = _patient(10)
-    assert service.PatientAccess(patient, "guardian").can_edit
-    assert not service.PatientAccess(patient, "guardian").can_manage_access
-    assert service.PatientAccess(patient, "guardian", is_primary_guardian=True).can_manage_access
-
-
-def test_family_sees_only_what_is_shared():
-    patient = _patient(30)
-    nothing = service.PatientAccess(patient, "family")
-    assert not nothing.can_edit
-    assert not nothing.sees_health_data
-    assert not nothing.sees_location
-    shared = service.PatientAccess(patient, "family", share_scope={"health_data": True})
-    assert shared.sees_health_data
-    assert not shared.sees_location
-
-
-def test_family_read_hides_unshared_fields(fernet):
-    patient = _patient(30)
-    patient.genotype = "SS"
-    patient.blood_group = "O+"
-    patient.created_at = date.today()
-    read = service.to_read(service.PatientAccess(patient, "family"))
-    assert read.genotype is None
-    assert read.blood_group is None
-    assert read.access == "family"
-    own = service.to_read(service.PatientAccess(patient, "self"))
-    assert own.genotype == "SS"
-
-
-# ---------------------------------------------------------------- HTTP
-def test_requires_authentication(client, no_db):
-    assert client.get(API).status_code == 401
-    assert client.get(API, headers={"Authorization": "Bearer junk"}).status_code == 401
-
-
-def test_token_user_is_passed_to_service(client, no_db, auth, user_id, monkeypatch):
-    seen = {}
-
-    async def fake(db, actor, patient_id):
-        seen["actor"] = actor
-        raise service.PatientNotFound("Patient not found")
-
-    monkeypatch.setattr(service, "get_patient", fake)
-    resp = client.get(f"{API}/{uuid.uuid4()}", headers={**auth, "User-Agent": "carekin-test"})
-    assert resp.status_code == 404
-    assert seen["actor"].user_id == user_id
-    assert seen["actor"].user_agent == "carekin-test"
-    assert seen["actor"].ip_address is None  # TestClient's host "testclient" isn't an IP
-
-
-@pytest.mark.parametrize(
-    ("error", "code"),
-    [
-        (service.PatientNotFound, 404),
-        (service.PatientAccessDenied, 403),
-        (service.PatientConflict, 409),
-        (service.PatientRuleViolation, 422),
-    ],
-)
-def test_service_errors_map_to_http(client, no_db, auth, monkeypatch, error, code):
-    async def fake(*args):
-        raise error("nope")
-
-    monkeypatch.setattr(service, "remove_guardian", fake)
-    resp = client.delete(f"{API}/{uuid.uuid4()}/guardians/{uuid.uuid4()}", headers=auth)
-    assert resp.status_code == code
-    assert resp.json() == {"detail": "nope"}
-
-
-def test_create_validates_body(client, no_db, auth):
-    assert client.post(API, json={"full_name": "A"}, headers=auth).status_code == 422
-
-
-def test_all_routes_registered(client):
-    paths = {p for p in client.get("/openapi.json").json()["paths"] if p.startswith(API)}
-    assert paths == {
-        API,
-        f"{API}/{{patient_id}}",
-        f"{API}/{{patient_id}}/guardians",
-        f"{API}/{{patient_id}}/guardians/{{guardian_id}}",
-        f"{API}/{{patient_id}}/emergency-contacts",
-        f"{API}/{{patient_id}}/emergency-contacts/{{contact_id}}",
-        f"{API}/{{patient_id}}/care-profile",
-        f"{API}/{{patient_id}}/family-links",
-        f"{API}/{{patient_id}}/family-links/{{link_id}}",
-    }
-
-
-# ---------------------------------------------------------------- audit log
-@pytest.fixture
-def ctx(user_id):
-    return AuditContext(user_id=user_id, ip_address="102.89.1.10", user_agent="test")
-
-
-def test_audit_context_keeps_only_valid_ips(user_id):
-    assert AuditContext.from_request(user_id, "102.89.1.10", None).ip_address == "102.89.1.10"
-    assert AuditContext.from_request(user_id, "testclient", None).ip_address is None
-    assert AuditContext.from_request(user_id, None, "x" * 900).user_agent == "x" * 500
-
-
-def _stub_access(monkeypatch, access):
-    async def fake(db, patient_id, actor_id):
-        return access
-
-    monkeypatch.setattr(service, "get_access", fake)
-
-
-def test_viewing_health_data_is_audited(monkeypatch, fernet, ctx):
-    patient = _patient(30)
-    patient.created_at = datetime.now(UTC)
-    _stub_access(monkeypatch, service.PatientAccess(patient, "guardian"))
-    db = FakeSession()
-    asyncio.run(service.get_patient(db, ctx, patient.id))
-    [entry] = db.audit_entries()
-    assert (entry.action, entry.entity_type, entry.entity_id) == (
-        "patient.view",
-        "patient",
-        patient.id,
+# ================================================================ end-to-end
+async def login(api, latest_code, phone, role="patient", consent=True):
+    """Register and verify a user; returns (auth headers, user id)."""
+    r = await api.post(
+        "/auth/register", json={"phone": phone, "full_name": "Ada Obi", "role": role}
     )
-    assert (entry.actor_id, entry.ip_address, entry.user_agent) == (
-        ctx.user_id,
-        "102.89.1.10",
-        "test",
+    assert r.status_code == 201, r.text
+    e164 = r.json()["user"]["phone"]
+    r = await api.post("/auth/otp/verify", json={"phone": e164, "code": latest_code(e164)})
+    assert r.status_code == 200, r.text
+    tokens = r.json()
+    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+    if consent:
+        r = await api.post(
+            "/auth/consent", json={"consent_type": "health_data", "granted": True}, headers=headers
+        )
+        assert r.status_code == 201, r.text
+    return headers, uuid.UUID(tokens["user"]["id"])
+
+
+async def family_user(db):
+    """family_abroad can't self-register, so create one directly."""
+    user = User(phone="+2348039999999", full_name="Uche Abroad", role=UserRole.FAMILY_ABROAD)
+    db.add(user)
+    await db.commit()
+    token = create_access_token(user.id, UserRole.FAMILY_ABROAD.value)
+    return {"Authorization": f"Bearer {token}"}, user.id
+
+
+async def actions(db):
+    return list((await db.scalars(select(AuditLog.action).order_by(AuditLog.id))).all())
+
+
+async def test_requires_login(api):
+    r = await api.get("/patients")
+    assert r.status_code == 401
+    assert r.json()["error"]["code"] == "not_authenticated"
+
+
+async def test_patient_registers_self(api, latest_code, db):
+    h, user_id = await login(api, latest_code, "08031230001")
+    r = await api.post(
+        "/patients",
+        json={
+            "full_name": "Ada Obi",
+            "date_of_birth": _dob(25),
+            "genotype": "ss",
+            "blood_group": "O+",
+            "home_location": {"latitude": 6.5244, "longitude": 3.3792},
+        },
+        headers=h,
     )
-    assert db.commits == 1
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["user_id"] == str(user_id)
+    assert (body["access"], body["genotype"], body["age"], body["is_minor"]) == (
+        "self",
+        "SS",
+        25,
+        False,
+    )
+    assert body["home_location"] == {"latitude": 6.5244, "longitude": 3.3792}
+
+    # Ciphertext at rest, not the genotype.
+    raw = await db.scalar(text("SELECT genotype FROM patients"))
+    assert raw is not None and b"SS" not in bytes(raw)
+
+    listed = (await api.get("/patients", headers=h)).json()
+    assert [p["id"] for p in listed] == [body["id"]]
+
+    r = await api.post(
+        "/patients", json={"full_name": "Again", "date_of_birth": _dob(25)}, headers=h
+    )
+    assert r.status_code == 409
+    assert "patient.create" in await actions(db)
+    assert "patient.view" in await actions(db)
 
 
-def test_viewing_without_health_data_is_not_audited(monkeypatch, fernet, ctx):
-    patient = _patient(30)
-    patient.created_at = datetime.now(UTC)
-    _stub_access(monkeypatch, service.PatientAccess(patient, "family"))
-    db = FakeSession()
-    asyncio.run(service.get_patient(db, ctx, patient.id))
-    assert db.audit_entries() == []
+async def test_health_data_needs_consent(api, latest_code):
+    h, _ = await login(api, latest_code, "08031230002", consent=False)
+    r = await api.post(
+        "/patients", json={"full_name": "A", "date_of_birth": _dob(30), "genotype": "SS"}, headers=h
+    )
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "consent_required"
+    r = await api.post("/patients", json={"full_name": "A", "date_of_birth": _dob(30)}, headers=h)
+    assert r.status_code == 201
+    pid = r.json()["id"]
+    r = await api.put(f"/patients/{pid}/care-profile", json={"allergies": "x"}, headers=h)
+    assert r.status_code == 403
 
 
-def test_care_profile_update_audits_fields_not_values(monkeypatch, fernet, ctx):
-    patient = _patient(30)
-    _stub_access(monkeypatch, service.PatientAccess(patient, "self"))
-    db = FakeSession(scalar=None)  # no existing profile
-    data = schemas.CareProfileWrite(allergies="penicillin", known_triggers="cold")
-    profile = asyncio.run(service.put_care_profile(db, ctx, patient.id, data))
-    [entry] = db.audit_entries()
-    assert entry.action == "care_profile.update"
-    assert entry.entity_id == profile.id
-    assert entry.metadata_["fields"] == ["allergies", "known_triggers"]
-    assert "penicillin" not in str(entry.metadata_)
-    assert profile.updated_by == ctx.user_id
+async def test_minor_cannot_register_self(api, latest_code):
+    h, _ = await login(api, latest_code, "08031230003")
+    r = await api.post("/patients", json={"full_name": "Kid", "date_of_birth": _dob(12)}, headers=h)
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "patient_rule_violation"
 
 
-def test_audit_log_table_shape():
-    table = AuditLog.__table__
-    assert table.name == "audit_logs"
-    assert {c.name for c in table.columns} == {
-        "id",
-        "actor_id",
-        "action",
-        "entity_type",
-        "entity_id",
-        "ip_address",
-        "user_agent",
-        "metadata",
-        "created_at",
+async def test_roles_decide_who_registers_whom(api, latest_code):
+    patient_h, _ = await login(api, latest_code, "08031230004", role="patient")
+    guardian_h, _ = await login(api, latest_code, "08031230005", role="guardian")
+    minor = {"full_name": "Kid", "date_of_birth": _dob(10), "for_self": False}
+    minor["guardian_relationship"] = "parent"
+    assert (await api.post("/patients", json=minor, headers=patient_h)).status_code == 403
+    adult = {"full_name": "Me", "date_of_birth": _dob(40)}
+    assert (await api.post("/patients", json=adult, headers=guardian_h)).status_code == 403
+
+
+async def test_guardian_registers_minor_and_keeps_a_primary(api, latest_code):
+    h, guardian_id = await login(api, latest_code, "08031230006", role="guardian")
+    second_h, second_id = await login(api, latest_code, "08031230007", role="guardian")
+    r = await api.post(
+        "/patients",
+        json={
+            "full_name": "Chidi Obi",
+            "date_of_birth": _dob(9),
+            "for_self": False,
+            "guardian_relationship": "Parent",
+        },
+        headers=h,
+    )
+    assert r.status_code == 201, r.text
+    child = r.json()
+    assert (child["user_id"], child["access"], child["is_minor"]) == (None, "guardian", True)
+    pid = child["id"]
+
+    [primary] = (await api.get(f"/patients/{pid}/guardians", headers=h)).json()
+    assert (primary["user_id"], primary["is_primary"], primary["relationship"]) == (
+        str(guardian_id),
+        True,
+        "parent",
+    )
+
+    # The only primary guardian of a minor can't be removed or demoted.
+    r = await api.delete(f"/patients/{pid}/guardians/{primary['id']}", headers=h)
+    assert r.status_code == 422
+    r = await api.patch(
+        f"/patients/{pid}/guardians/{primary['id']}", json={"is_primary": False}, headers=h
+    )
+    assert r.status_code == 422
+
+    r = await api.post(
+        f"/patients/{pid}/guardians",
+        json={"user_id": str(second_id), "relationship": "aunt"},
+        headers=h,
+    )
+    assert r.status_code == 201, r.text
+    second = r.json()
+    assert (
+        await api.post(
+            f"/patients/{pid}/guardians",
+            json={"user_id": str(second_id), "relationship": "aunt"},
+            headers=h,
+        )
+    ).status_code == 409
+
+    # A non-primary guardian can read and edit, but not manage access.
+    assert (await api.get(f"/patients/{pid}", headers=second_h)).status_code == 200
+    r = await api.delete(f"/patients/{pid}/guardians/{primary['id']}", headers=second_h)
+    assert r.status_code == 403
+
+    # Promoting the second guardian demotes the first; then the first can be removed.
+    r = await api.patch(
+        f"/patients/{pid}/guardians/{second['id']}", json={"is_primary": True}, headers=h
+    )
+    assert r.json()["is_primary"] is True
+    guardians = {
+        g["id"]: g for g in (await api.get(f"/patients/{pid}/guardians", headers=h)).json()
     }
-    assert any([c.name for c in ix.columns] == ["entity_type", "entity_id"] for ix in table.indexes)
+    assert guardians[primary["id"]]["is_primary"] is False
+    r = await api.delete(f"/patients/{pid}/guardians/{primary['id']}", headers=second_h)
+    assert r.status_code == 204
+
+
+async def test_strangers_get_404(api, latest_code):
+    h, _ = await login(api, latest_code, "08031230008")
+    stranger_h, _ = await login(api, latest_code, "08031230009")
+    pid = (
+        await api.post("/patients", json={"full_name": "A", "date_of_birth": _dob(30)}, headers=h)
+    ).json()["id"]
+    r = await api.get(f"/patients/{pid}", headers=stranger_h)
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "patient_not_found"
+    assert (await api.get(f"/patients/{uuid.uuid4()}", headers=h)).status_code == 404
+
+
+async def test_care_profile_is_encrypted_and_audited_without_values(api, latest_code, db):
+    h, user_id = await login(api, latest_code, "08031230010")
+    pid = (
+        await api.post("/patients", json={"full_name": "A", "date_of_birth": _dob(30)}, headers=h)
+    ).json()["id"]
+    assert (await api.get(f"/patients/{pid}/care-profile", headers=h)).status_code == 404
+
+    r = await api.put(
+        f"/patients/{pid}/care-profile",
+        json={"known_triggers": "cold weather", "allergies": "penicillin"},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["allergies"] == "penicillin"
+    assert r.json()["updated_by"] == str(user_id)
+    r = await api.get(f"/patients/{pid}/care-profile", headers=h)
+    assert r.json()["known_triggers"] == "cold weather"
+
+    raw = await db.scalar(text("SELECT allergies FROM care_profiles"))
+    assert b"penicillin" not in bytes(raw)
+    entry = await db.scalar(select(AuditLog).where(AuditLog.action == "care_profile.update"))
+    assert entry.meta["fields"] == ["allergies", "known_triggers"]
+    assert "penicillin" not in str(entry.meta)
+    assert "care_profile.view" in await actions(db)
+
+
+async def test_family_link_sees_only_what_is_shared(api, latest_code, db):
+    h, _ = await login(api, latest_code, "08031230011")
+    family_h, family_id = await family_user(db)
+    pid = (
+        await api.post(
+            "/patients",
+            json={"full_name": "A", "date_of_birth": _dob(30), "genotype": "SC"},
+            headers=h,
+        )
+    ).json()["id"]
+    r = await api.post(f"/patients/{pid}/family-links", json={"user_id": str(family_id)}, headers=h)
+    assert r.status_code == 201, r.text
+    link_id = r.json()["id"]
+
+    seen = (await api.get(f"/patients/{pid}", headers=family_h)).json()
+    assert (seen["access"], seen["genotype"], seen["full_name"]) == ("family", None, "A")
+    assert (await api.get(f"/patients/{pid}/care-profile", headers=family_h)).status_code == 403
+    assert (
+        await api.patch(f"/patients/{pid}", json={"full_name": "B"}, headers=family_h)
+    ).status_code == 403
+
+    await api.patch(
+        f"/patients/{pid}/family-links/{link_id}",
+        json={"share_scope": {"health_data": True}},
+        headers=h,
+    )
+    assert (await api.get(f"/patients/{pid}", headers=family_h)).json()["genotype"] == "SC"
+
+
+async def test_emergency_contacts(api, latest_code):
+    h, _ = await login(api, latest_code, "08031230012")
+    pid = (
+        await api.post("/patients", json={"full_name": "A", "date_of_birth": _dob(30)}, headers=h)
+    ).json()["id"]
+    base = f"/patients/{pid}/emergency-contacts"
+    second = {"name": "Bola", "phone": "+2348011111111", "relationship": "friend", "priority": 2}
+    first = {"name": "Mama", "phone": "+2348022222222", "relationship": "Mother"}
+    assert (await api.post(base, json=second, headers=h)).status_code == 201
+    r = await api.post(base, json=first, headers=h)
+    assert r.status_code == 201
+    assert (r.json()["channel"], r.json()["relationship"]) == ("sms", "mother")
+    names = [c["name"] for c in (await api.get(base, headers=h)).json()]
+    assert names == ["Mama", "Bola"]
+
+    bad = {**first, "phone": "08022222222"}
+    assert (await api.post(base, json=bad, headers=h)).status_code == 422
+    contact_id = r.json()["id"]
+    r = await api.patch(f"{base}/{contact_id}", json={"channel": "whatsapp"}, headers=h)
+    assert r.json()["channel"] == "whatsapp"
+    assert (await api.delete(f"{base}/{contact_id}", headers=h)).status_code == 204
+    assert len((await api.get(base, headers=h)).json()) == 1

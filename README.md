@@ -22,6 +22,16 @@ docker compose up --build
 
 API: http://localhost:8000/api/v1 · Docs: http://localhost:8000/docs
 
+The backend container applies migrations (`alembic upgrade head`) on start.
+Auth API contract for web and mobile: [`docs/api/auth.md`](docs/api/auth.md).
+
+### Backend tests
+
+```bash
+docker compose up -d db redis        # Postgres + Redis; creates carekin_test on first run
+cd backend && pip install -e ".[dev]" && pytest
+```
+
 ## Ground rules
 
 - No medical advice, dosing or diagnosis from any AI component — hard line.
