@@ -345,7 +345,9 @@ async def test_family_link_sees_only_what_is_shared(api, latest_code, db):
     assert r.status_code == 201, r.text
     link_id = r.json()["id"]
 
-    seen = (await api.get(f"/patients/{pid}", headers=family_h)).json()
+    r = await api.get(f"/patients/{pid}", headers=family_h)
+    assert r.status_code == 200, r.text
+    seen = r.json()
     assert (seen["access"], seen["genotype"], seen["full_name"]) == ("family", None, "A")
     assert (await api.get(f"/patients/{pid}/care-profile", headers=family_h)).status_code == 403
     assert (
