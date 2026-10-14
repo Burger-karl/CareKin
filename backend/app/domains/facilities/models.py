@@ -1,7 +1,3 @@
-"""facilities SQLAlchemy models. Facility, FacilityService, SCD filters."""
-from app.database import Base  # noqa: F401
-
-
 from __future__ import annotations
 
 import uuid
@@ -26,8 +22,6 @@ from app.database import (
     TimestampMixin,
 )
 
-
-# ---------------- ENUMS ----------------
 
 class VerificationStatus(str, Enum):
     PENDING = "pending"
