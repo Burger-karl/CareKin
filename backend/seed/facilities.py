@@ -1,16 +1,14 @@
 """Seed Enugu SCD-relevant facilities (build plan Day 3; used by the finder and crisis button).
 
-    python -m seed.facilities                  # all listings unverified (the honest default)
-    python -m seed.facilities --demo-verified  # mark them verified so demos show results
-
-Needs the facilities models (facilities domain, Day 7); until they exist this exits
-with a message. Values use the ERD's column names and lowercase enum values.
+    python -m seed.facilities                  # all listings pending (the honest default)
+    python -m seed.facilities --demo-verified  # verify everything so demos show results
 
 These are real, public hospitals, but every detail here is UNCONFIRMED:
 - coordinates are approximate and services are what we expect, not what we checked;
 - phone numbers are left empty on purpose: a wrong number in a crisis is worse than none.
 Facility verification (Day 7) replaces them with checked data. Until then they stay
-`unverified`, and the crisis button only lists verified facilities.
+`pending`, with unverified locations and services, and the crisis button only lists
+fully verified facilities.
 
 `--demo-verified` exists for local demos only and is refused outside development/test.
 Safe to run repeatedly: facilities that already exist (by name) are left alone.
@@ -21,7 +19,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
 from geoalchemy2 import WKTElement
 from sqlalchemy import select
@@ -29,9 +26,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Environment, get_settings
 from app.database import SessionLocal
+from app.domains.facilities.models import (
+    Facility,
+    FacilityService,
+    ServiceAvailability,
+    VerificationStatus,
+)
 from seed._common import close, prepare, refuse_unsafe_environment
-
-UNCONFIRMED = "Seed data, unconfirmed: check during facility verification (Day 7)."
 
 
 @dataclass(frozen=True)
@@ -132,35 +133,25 @@ FACILITIES: tuple[SeedFacility, ...] = (
 
 async def seed_facilities(db: AsyncSession, *, demo_verified: bool = False) -> int:
     """Insert missing facilities. Returns how many were added."""
-    from app.domains.crisis.facilities import facility_models
-
-    models = facility_models()
-    if models is None:
-        raise SystemExit(
-            "The facilities models aren't built yet (facilities domain, Day 7): nothing to seed."
-        )
-    Facility, FacilityService = models
-
     if demo_verified and get_settings().ENVIRONMENT not in (
         Environment.DEVELOPMENT,
         Environment.TEST,
     ):
         raise SystemExit("--demo-verified is only allowed in development and test.")
 
+    status = VerificationStatus.VERIFIED if demo_verified else VerificationStatus.PENDING
     existing = set(await db.scalars(select(Facility.name)))
     added = 0
-    now = datetime.now(UTC)
     for item in FACILITIES:
         if item.name in existing:
             continue
         facility = Facility(
             name=item.name,
-            facility_type=item.facility_type,
-            address=item.address,
-            lga=item.lga,
+            address=f"{item.address} ({item.lga} LGA)",
+            phone_number="",  # unconfirmed: left empty on purpose (see module docstring)
             location=WKTElement(f"POINT({item.lng} {item.lat})", srid=4326),
-            verification_status=("verified" if demo_verified else "unverified"),
-            last_verified_at=now if demo_verified else None,
+            verification_status=status,
+            location_verified=demo_verified,
         )
         db.add(facility)
         await db.flush()
@@ -169,7 +160,8 @@ async def seed_facilities(db: AsyncSession, *, demo_verified: bool = False) -> i
                 FacilityService(
                     facility_id=facility.id,
                     service_type=service,
-                    notes=UNCONFIRMED,
+                    availability=ServiceAvailability.AVAILABLE,
+                    verification_status=status,
                 )
             )
         added += 1

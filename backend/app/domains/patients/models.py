@@ -135,9 +135,9 @@ class CareProfile(UUIDPrimaryKeyMixin, Base):
     )
     allergies: Mapped[str | None] = mapped_column(EncryptedText)
     care_instructions: Mapped[str | None] = mapped_column(EncryptedText)
-    # No FK yet: the facilities table doesn't exist. The facilities migration should add
-    # fk_care_profiles_primary_facility_id_facilities (ON DELETE SET NULL).
-    primary_facility_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
+    primary_facility_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("facilities.id", ondelete="SET NULL"), index=True
+    )
     updated_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )

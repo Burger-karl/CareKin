@@ -107,7 +107,7 @@ class AlertOut(BaseModel):
 class FacilityOut(BaseModel):
     id: uuid.UUID
     name: str
-    facility_type: str = Field(examples=["teaching_hospital"])
+    facility_type: str | None = Field(default=None, examples=["teaching_hospital"])
     address: str
     latitude: float
     longitude: float

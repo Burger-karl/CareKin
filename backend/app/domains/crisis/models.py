@@ -97,9 +97,9 @@ class CrisisEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     resolved_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )
-    # No FK yet: the facilities table doesn't exist. The facilities migration should add
-    # fk_crisis_events_outcome_facility_id_facilities (ON DELETE SET NULL).
-    outcome_facility_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
+    outcome_facility_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("facilities.id", ondelete="SET NULL"), index=True
+    )
 
     alerts: Mapped[list[CrisisAlert]] = relationship(
         back_populates="crisis_event", lazy="raise", order_by="CrisisAlert.created_at"

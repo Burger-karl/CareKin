@@ -23,7 +23,6 @@ from app.core.security import create_access_token
 from app.domains.auth.models import User
 from app.domains.crisis import router as crisis_router
 from app.domains.crisis import service
-from app.domains.crisis.facilities import facilities_available
 from app.domains.crisis.models import (
     AlertStatus,
     CrisisAlert,
@@ -51,14 +50,6 @@ from app.tests.crisis_factories import (
 )
 
 DISCLAIMER_START = "CareKin does not give medical advice"
-
-# The facilities domain (Day 7) owns the facility tables. Until its models exist, the
-# ranking tests are skipped and the "no facility directory yet" tests run instead.
-FACILITIES = facilities_available()
-needs_facilities = pytest.mark.skipif(
-    not FACILITIES, reason="facilities models not built yet (facilities domain, Day 7)"
-)
-without_facilities = pytest.mark.skipif(FACILITIES, reason="facilities models exist")
 
 
 @dataclass
@@ -134,8 +125,7 @@ async def family(db) -> Family:
 
 @pytest.fixture
 async def facilities(db) -> dict[str, Any]:
-    if not FACILITIES:
-        pytest.skip("facilities models not built yet")
+    """Only fully verified facilities with a crisis service may be listed."""
     lat, lng = ENUGU
     return {
         "near": await make_facility(db, "Near General", lat + 0.01, lng),
@@ -146,9 +136,14 @@ async def facilities(db) -> dict[str, Any]:
             lng,
             services=("haematologist", "transfusion"),
         ),
-        "stale": await make_facility(db, "Stale Clinic", lat + 0.05, lng, status="stale"),
-        "unverified": await make_facility(
-            db, "Unverified Close", lat + 0.004, lng, status="unverified"
+        "third": await make_facility(db, "Third General", lat + 0.05, lng),
+        "pending": await make_facility(db, "Pending Close", lat + 0.004, lng, status="pending"),
+        "rejected": await make_facility(db, "Rejected Close", lat + 0.002, lng, status="rejected"),
+        "location_unchecked": await make_facility(
+            db, "Unchecked Location", lat + 0.003, lng, location_verified=False
+        ),
+        "service_unchecked": await make_facility(
+            db, "Unchecked Service", lat + 0.006, lng, service_status="pending"
         ),
         "lab_only": await make_facility(
             db, "Lab Only", lat + 0.007, lng, services=("genotype_testing",)
@@ -192,7 +187,7 @@ async def test_trigger_alerts_contacts(api, family, sms):
     assert all("*" in a["phone"] for a in body["alerts"])  # masked in the API
     assert body["no_contacts"] is False
 
-    assert body["nearby"]["facilities_available"] is FACILITIES
+    assert body["nearby"]["facilities_available"] is True
 
     # Background delivery has run: both alerts sent by SMS.
     alerts = await rows(CrisisAlert)
@@ -201,47 +196,33 @@ async def test_trigger_alerts_contacts(api, family, sms):
     assert sorted(m.to for m in sms.outbox) == sorted([family.mum.phone, family.aunt_phone])
 
 
-@needs_facilities
 async def test_nearest_verified_facilities_are_listed_first(api, family, facilities):
     nearby = (await press(api, family)).json()["nearby"]
 
-    # Unverified, lab-only and closed-ER listings are left out; stale ones stay (FF-5).
+    # Left out, although closer: pending or rejected facilities, an unchecked location,
+    # an unchecked service, a temporarily unavailable ER, and a lab with no crisis service.
     assert [f["name"] for f in nearby["facilities"]] == [
         "Near General",
         "Mid Teaching",
-        "Stale Clinic",
+        "Third General",
     ]
     assert nearby["widened_search"] is False and nearby["radius_km"] == 50
     first = nearby["facilities"][0]
     assert 1000 < first["distance_m"] < 1250
-    assert first["call_number"] == facilities["near"].emergency_phone
+    assert first["call_number"] == first["phone"] == facilities["near"].phone_number
     assert first["directions_url"].startswith("https://www.google.com/maps/dir/?api=1&destination=")
     assert first["latitude"] == pytest.approx(ENUGU[0] + 0.01)
     assert nearby["facilities"][1]["crisis_services"] == ["haematologist", "transfusion"]
-    assert nearby["facilities"][2]["verification_status"] == "stale"
+    assert {f["verification_status"] for f in nearby["facilities"]} == {"verified"}
 
 
-@without_facilities
-async def test_without_the_facility_directory_crisis_still_works(api, family, sms):
-    created = await press(api, family)
-
-    assert created.status_code == 201
-    nearby = created.json()["nearby"]
-    assert nearby["facilities_available"] is False
-    assert nearby["facilities"] == [] and nearby["radius_km"] is None
-    assert len(sms.outbox) == 2  # alerts don't depend on facilities
-    event_id = created.json()["id"]
-    listing = await api.get(f"/crisis/events/{event_id}/facilities", headers=auth(family.mum))
-    assert listing.status_code == 200 and listing.json()["facilities_available"] is False
-
-    # No facility can be named yet, so an outcome facility is "not found".
-    resolve = await api.post(
-        f"/crisis/events/{event_id}/resolve",
-        json={"outcome_facility_id": str(uuid.uuid4())},
-        headers=auth(family.mum),
-    )
-    assert resolve.status_code == 404
-    assert resolve.json()["error"]["code"] == "facility_not_found"
+async def test_service_names_match_with_spaces_or_underscores(api, db, family):
+    # The facilities domain stores free-text service names, lowercased.
+    await make_facility(db, "Spaced", ENUGU[0] + 0.01, ENUGU[1], services=("emergency 24h",))
+    await make_facility(db, "Haematology", ENUGU[0] + 0.02, ENUGU[1], services=("haematology",))
+    await make_facility(db, "Pharmacy", ENUGU[0] + 0.005, ENUGU[1], services=("pharmacy",))
+    nearby = (await press(api, family)).json()["nearby"]
+    assert [f["name"] for f in nearby["facilities"]] == ["Spaced", "Haematology"]
 
 
 async def test_alert_text_is_short_private_and_gives_no_medical_advice(api, family, sms):
@@ -498,7 +479,6 @@ async def test_naive_timestamps_and_unknown_fields_are_rejected(api, family):
 
 
 # ------------------------------------------------------------------ facilities
-@needs_facilities
 async def test_search_widens_when_nothing_verified_is_close(api, db, family):
     await make_facility(db, "Far Away Teaching", ENUGU[0] + 0.72, ENUGU[1])  # ~80 km
     nearby = (await press(api, family)).json()["nearby"]
@@ -506,14 +486,12 @@ async def test_search_widens_when_nothing_verified_is_close(api, db, family):
     assert [f["name"] for f in nearby["facilities"]] == ["Far Away Teaching"]
 
 
-@needs_facilities
 async def test_nothing_within_the_widest_radius(api, db, family):
     await make_facility(db, "Lagos", 6.5244, 3.3792)  # ~460 km away
     nearby = (await press(api, family)).json()["nearby"]
     assert nearby["facilities"] == [] and nearby["widened_search"] is True
 
 
-@needs_facilities
 async def test_facility_list_is_capped(api, db, family, monkeypatch):
     monkeypatch.setattr(get_settings(), "CRISIS_FACILITY_LIMIT", 3)
     for i in range(6):
@@ -528,22 +506,27 @@ async def test_facility_list_is_capped(api, db, family, monkeypatch):
     assert [f["name"] for f in again.json()["facilities"]] == names
 
 
-@needs_facilities
 async def test_trigger_is_fast_with_many_facilities(api, db, family):
     from app.domains.facilities.models import Facility, FacilityService
 
     for i in range(300):
         facility = Facility(
             name=f"Bulk {i}",
-            facility_type="clinic",
             address="Enugu",
-            phone=phone(),
+            phone_number=phone(),
             location=point(ENUGU[0] + (i % 30) * 0.02, ENUGU[1] + (i // 30) * 0.02),
             verification_status="verified",
+            location_verified=True,
         )
         db.add(facility)
         await db.flush()
-        db.add(FacilityService(facility_id=facility.id, service_type="emergency_24h"))
+        db.add(
+            FacilityService(
+                facility_id=facility.id,
+                service_type="emergency_24h",
+                verification_status="verified",
+            )
+        )
     await db.commit()
 
     start = time.perf_counter()
@@ -737,7 +720,6 @@ async def test_resolve_with_consent_writes_an_encrypted_passport_entry(api, db, 
     assert event.resolved_by == family.mum.id and event.status is CrisisStatus.RESOLVED
 
 
-@needs_facilities
 async def test_resolve_can_name_the_facility_they_went_to(api, db, family, facilities):
     await grant_consent(db, family.mum)
     event_id = (await press(api, family)).json()["id"]

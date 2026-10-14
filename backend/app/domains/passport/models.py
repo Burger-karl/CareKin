@@ -40,9 +40,9 @@ class PassportEntry(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     occurred_at: Mapped[datetime]
     summary: Mapped[str] = mapped_column(EncryptedText)  # field-encrypted (HP-4)
     details: Mapped[str | None] = mapped_column(EncryptedText)
-    # No FK yet: the facilities table doesn't exist. The facilities migration should add
-    # fk_passport_entries_facility_id_facilities (ON DELETE SET NULL).
-    facility_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
+    facility_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("facilities.id", ondelete="SET NULL"), index=True
+    )
     # Set when written from a resolved crisis (CR-4). At most one entry per crisis.
     crisis_event_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("crisis_events.id", ondelete="RESTRICT"), unique=True

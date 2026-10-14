@@ -1,4 +1,3 @@
-"""Field-level encryption (health passport data)."""
 """Field-level encryption for health data (PRD HP-4, ERD conventions).
 
 Health fields are encrypted in the application before they reach Postgres, so a

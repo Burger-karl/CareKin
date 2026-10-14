@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.core.permissions import UserRole
 from app.core.security import create_access_token
 from app.domains.auth.models import ConsentRecord, ConsentType, User
+from app.domains.facilities.models import Facility, FacilityService
 from app.domains.patients.models import EmergencyContact, FamilyLink, Guardian, Patient
 
 # Central Enugu. 0.01 degrees of latitude is about 1.1 km.
@@ -103,25 +104,28 @@ async def make_facility(
     services: tuple[str, ...] = ("emergency_24h",),
     status: str = "verified",
     available: bool = True,
-) -> Any:
-    """A facility row, using the ERD's column names. Needs the facilities models (Day 7)."""
-    from app.domains.facilities.models import Facility, FacilityService
-
+    location_verified: bool = True,
+    service_status: str = "verified",
+) -> Facility:
+    """A facility as the facilities domain stores it. Defaults: fully verified."""
     facility = Facility(
         name=name,
-        facility_type="general_hospital",
         address=f"{name}, Enugu",
-        phone=phone(),
-        emergency_phone=phone(),
+        phone_number=phone(),
         location=point(lat, lng),
         verification_status=status,
-        last_verified_at=datetime.now(UTC) if status == "verified" else None,
+        location_verified=location_verified,
     )
     db.add(facility)
     await db.flush()
     for service in services:
         db.add(
-            FacilityService(facility_id=facility.id, service_type=service, is_available=available)
+            FacilityService(
+                facility_id=facility.id,
+                service_type=service,
+                availability="available" if available else "temporarily_unavailable",
+                verification_status=service_status,
+            )
         )
     await db.commit()
     return facility

@@ -1,61 +1,47 @@
-"""How the crisis button reads facilities, owned by the facilities domain (Day 7).
+"""How the crisis button finds facilities, using the facilities domain's models (Day 7).
 
-The crisis domain doesn't define facility tables. It looks up `Facility` and
-`FacilityService` in app/domains/facilities/models.py at runtime:
+A facility is shown in a crisis only if the facilities domain has fully verified it:
+    Facility          verification_status = verified, location_verified, has a location
+    FacilityService   verification_status = verified, availability = available,
+                      and its service type can receive a patient in crisis (CR-2)
+In an emergency an unverified claim of "24h haematology" is worse than no answer.
 
-- Until those models exist, crisis still works: alerts go out and the response says
-  `facilities_available: false` with an empty list, and a resolve can't name a facility.
-- As soon as they exist, nearby facilities appear, with no change here.
-
-What crisis needs from the facilities models (ERD section 2.4). Facilities owner:
-please keep these names, or tell the crisis owner if they change.
-
-    Facility          id, name, facility_type, address, phone, emergency_phone,
-                      location (Geography POINT, SRID 4326),
-                      verification_status, last_verified_at
-    FacilityService   facility_id, service_type, is_available
-
-Enum columns must store the ERD's lowercase values ("verified", "emergency_24h", ...).
-They are compared as text, so a native enum or a plain string column both work.
-
-The facilities migration should also add the foreign keys left out until then:
-    crisis_events.outcome_facility_id   -> facilities.id  ON DELETE SET NULL
-    passport_entries.facility_id        -> facilities.id  ON DELETE SET NULL
-    care_profiles.primary_facility_id   -> facilities.id  ON DELETE SET NULL
+Service types are free text in the facilities domain (stored lowercased by
+facilities.service.normalize_service_type). CRISIS_SERVICE_NAMES lists the names that
+count, compared with underscores read as spaces. Agree the canonical names with the
+facilities owner (the ERD uses emergency_24h, haematologist, transfusion).
 """
 
 from __future__ import annotations
 
-import importlib
 import uuid
 from dataclasses import dataclass
 from typing import Any
 
 from geoalchemy2 import Geography, Geometry
-from sqlalchemy import String, and_, cast, func, select
+from sqlalchemy import cast, func, select
 from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.domains.facilities.models import (
+    Facility,
+    FacilityService,
+    ServiceAvailability,
+    VerificationStatus,
+)
 
-# Services that mean "can receive a patient in a sickle-cell crisis" (CR-2).
-CRISIS_CAPABLE_SERVICES = ("emergency_24h", "haematologist", "transfusion")
-# Only verified listings, or verified ones due for a recheck (FF-5).
-LISTABLE_STATUSES = ("verified", "stale")
-
-
-def facility_models() -> tuple[Any, Any] | None:
-    """(Facility, FacilityService), or None until the facilities domain defines them."""
-    module = importlib.import_module("app.domains.facilities.models")
-    facility = getattr(module, "Facility", None)
-    service = getattr(module, "FacilityService", None)
-    if facility is None or service is None:
-        return None
-    return facility, service
-
-
-def facilities_available() -> bool:
-    return facility_models() is not None
+CRISIS_SERVICE_NAMES = (
+    "emergency 24h",
+    "24h emergency",
+    "24 hour emergency",
+    "haematologist",
+    "haematology",
+    "hematologist",
+    "hematology",
+    "transfusion",
+    "blood transfusion",
+)
 
 
 @dataclass
@@ -66,10 +52,17 @@ class NearbyResult:
     available: bool = True
 
 
+def _crisis_service():
+    service_name = func.replace(FacilityService.service_type, "_", " ")
+    return (
+        FacilityService.verification_status == VerificationStatus.VERIFIED,
+        FacilityService.availability == ServiceAvailability.AVAILABLE,
+        service_name.in_(CRISIS_SERVICE_NAMES),
+    )
+
+
 async def nearby(db: AsyncSession, latitude: float | None, longitude: float | None) -> NearbyResult:
-    """Verified, crisis-capable facilities, nearest first. Widens the search once."""
-    if not facilities_available():
-        return NearbyResult([], None, False, available=False)
+    """Fully verified, crisis-capable facilities, nearest first. Widens the search once."""
     if latitude is None or longitude is None:
         return NearbyResult([], None, False)
     settings = get_settings()
@@ -86,72 +79,53 @@ async def nearby(db: AsyncSession, latitude: float | None, longitude: float | No
 async def _within(
     db: AsyncSession, latitude: float, longitude: float, radius_km: float
 ) -> list[dict[str, Any]]:
-    facility, service = facility_models()  # type: ignore[misc]
     origin = cast(func.ST_SetSRID(func.ST_MakePoint(longitude, latitude), 4326), Geography)
-    point = cast(facility.location, Geometry)
-    distance = func.ST_Distance(facility.location, origin)
-    service_text = cast(service.service_type, String)
+    point = cast(Facility.location, Geometry)
+    distance = func.ST_Distance(Facility.location, origin)
+    service_type = FacilityService.service_type
     stmt = (
         select(
-            facility.id,
-            facility.name,
-            cast(facility.facility_type, String),
-            facility.address,
+            Facility.id,
+            Facility.name,
+            Facility.address,
+            Facility.phone_number,
             func.ST_Y(point),
             func.ST_X(point),
             distance,
-            facility.phone,
-            facility.emergency_phone,
-            cast(facility.verification_status, String),
-            facility.last_verified_at,
-            func.array_agg(aggregate_order_by(service_text, service_text)),
+            func.array_agg(aggregate_order_by(service_type, service_type)),
         )
-        .join(
-            service,
-            and_(
-                service.facility_id == facility.id,
-                service.is_available.is_(True),
-                service_text.in_(CRISIS_CAPABLE_SERVICES),
-            ),
-        )
+        .join(FacilityService, FacilityService.facility_id == Facility.id)
         .where(
-            cast(facility.verification_status, String).in_(LISTABLE_STATUSES),
-            func.ST_DWithin(facility.location, origin, radius_km * 1000),
+            Facility.verification_status == VerificationStatus.VERIFIED,
+            Facility.location_verified.is_(True),
+            Facility.location.is_not(None),
+            func.ST_DWithin(Facility.location, origin, radius_km * 1000),
+            *_crisis_service(),
         )
-        .group_by(facility.id)
-        .order_by(distance, facility.id)
+        .group_by(Facility.id)
+        .order_by(distance, Facility.id)
         .limit(get_settings().CRISIS_FACILITY_LIMIT)
     )
     results = []
-    for (
-        facility_id,
-        name,
-        facility_type,
-        address,
-        lat,
-        lng,
-        distance_m,
-        phone,
-        emergency_phone,
-        status,
-        last_verified_at,
-        services,
-    ) in (await db.execute(stmt)).all():
+    for facility_id, name, address, phone, lat, lng, distance_m, services in (
+        await db.execute(stmt)
+    ).all():
+        phone = phone or None  # the seed leaves unconfirmed numbers empty
         results.append(
             {
                 "id": facility_id,
                 "name": name,
-                "facility_type": facility_type,
+                "facility_type": None,  # not in the facilities model yet
                 "address": address,
                 "latitude": lat,
                 "longitude": lng,
                 "distance_m": round(distance_m),
-                "call_number": emergency_phone or phone,
+                "call_number": phone,
                 "phone": phone,
-                "emergency_phone": emergency_phone,
+                "emergency_phone": None,  # not in the facilities model yet
                 "crisis_services": list(services),
-                "verification_status": status,
-                "last_verified_at": last_verified_at,
+                "verification_status": VerificationStatus.VERIFIED.value,
+                "last_verified_at": None,  # not in the facilities model yet
                 "directions_url": (
                     f"https://www.google.com/maps/dir/?api=1&destination={lat:.6f},{lng:.6f}"
                 ),
@@ -161,9 +135,5 @@ async def _within(
 
 
 async def facility_name(db: AsyncSession, facility_id: uuid.UUID) -> str | None:
-    """The facility's name, or None if it doesn't exist (or facilities aren't built yet)."""
-    models = facility_models()
-    if models is None:
-        return None
-    facility, _ = models
-    return await db.scalar(select(facility.name).where(facility.id == facility_id))
+    """The facility's name, or None if it doesn't exist."""
+    return await db.scalar(select(Facility.name).where(Facility.id == facility_id))
