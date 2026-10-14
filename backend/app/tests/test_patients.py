@@ -143,7 +143,7 @@ async def family_user(db):
     user = User(phone="+2348039999999", full_name="Uche Abroad", role=UserRole.FAMILY_ABROAD)
     db.add(user)
     await db.commit()
-    token = create_access_token(user.id, UserRole.FAMILY_ABROAD.value)
+    token, _ = create_access_token(user.id, UserRole.FAMILY_ABROAD.value)
     return {"Authorization": f"Bearer {token}"}, user.id
 
 
