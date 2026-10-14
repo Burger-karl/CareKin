@@ -27,9 +27,8 @@ from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import Request
-from geoalchemy2 import Geography, WKTElement
-from sqlalchemy import and_, cast, func, select, true
-from sqlalchemy.dialects.postgresql import aggregate_order_by
+from geoalchemy2 import WKTElement
+from sqlalchemy import select, true
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -41,6 +40,8 @@ from app.core.permissions import UserRole
 from app.core.phone import mask_phone
 from app.domains.auth.models import ConsentType, User
 from app.domains.auth.service import has_consent
+from app.domains.crisis import facilities
+from app.domains.crisis.facilities import NearbyResult
 from app.domains.crisis.models import (
     AlertStatus,
     CrisisAlert,
@@ -49,13 +50,6 @@ from app.domains.crisis.models import (
     LocationSource,
 )
 from app.domains.crisis.schemas import CrisisResolveIn, CrisisTriggerIn
-from app.domains.facilities.models import (
-    CRISIS_CAPABLE_SERVICES,
-    Facility,
-    FacilityService,
-    ServiceType,
-    VerificationStatus,
-)
 from app.domains.passport.models import PassportEntry, PassportEntryType
 from app.domains.patients.models import AlertChannel, EmergencyContact, Guardian, Patient
 from app.domains.patients.service import get_access
@@ -287,86 +281,14 @@ async def _queue_alerts(
 
 
 # ------------------------------------------------------------------ facilities
-@dataclass
-class NearbyResult:
-    facilities: list[dict[str, Any]]
-    radius_km: float | None
-    widened: bool
-
-
 async def nearby_facilities(db: AsyncSession, event: CrisisEvent) -> NearbyResult:
     """Verified facilities that can receive a patient in crisis, nearest first (CR-2).
 
     Only verified listings (or verified-but-due-for-recheck) are shown: in an
     emergency an unverified claim of "24h haematology" is worse than no answer.
-    If none are inside the normal radius, one wider search runs.
+    Empty with `available=False` until the facilities domain exists (see facilities.py).
     """
-    settings = get_settings()
-    if event.latitude is None or event.longitude is None:
-        return NearbyResult([], None, False)
-    radii = [(settings.CRISIS_FACILITY_RADIUS_KM, False)]
-    if settings.CRISIS_FACILITY_FALLBACK_RADIUS_KM > settings.CRISIS_FACILITY_RADIUS_KM:
-        radii.append((settings.CRISIS_FACILITY_FALLBACK_RADIUS_KM, True))
-    for radius_km, widened in radii:
-        rows = await _facilities_within(db, event.latitude, event.longitude, radius_km)
-        if rows:
-            return NearbyResult(rows, radius_km, widened)
-    return NearbyResult([], radii[-1][0], len(radii) > 1)
-
-
-async def _facilities_within(
-    db: AsyncSession, latitude: float, longitude: float, radius_km: float
-) -> list[dict[str, Any]]:
-    settings = get_settings()
-    origin = cast(func.ST_SetSRID(func.ST_MakePoint(longitude, latitude), 4326), Geography)
-    distance = func.ST_Distance(Facility.location, origin).label("distance_m")
-    services = func.array_agg(
-        aggregate_order_by(FacilityService.service_type, FacilityService.service_type)
-    ).label("crisis_services")
-    stmt = (
-        select(Facility, distance, services)
-        .join(
-            FacilityService,
-            and_(
-                FacilityService.facility_id == Facility.id,
-                FacilityService.is_available.is_(True),
-                FacilityService.service_type.in_(sorted(CRISIS_CAPABLE_SERVICES)),
-            ),
-        )
-        .where(
-            Facility.verification_status.in_(
-                [VerificationStatus.VERIFIED, VerificationStatus.STALE]
-            ),
-            func.ST_DWithin(Facility.location, origin, radius_km * 1000),
-        )
-        .group_by(Facility.id)
-        .order_by(distance, Facility.id)
-        .limit(settings.CRISIS_FACILITY_LIMIT)
-    )
-    results = []
-    for facility, distance_m, crisis_services in (await db.execute(stmt)).all():
-        results.append(
-            {
-                "id": facility.id,
-                "name": facility.name,
-                "facility_type": facility.facility_type,
-                "address": facility.address,
-                "latitude": facility.latitude,
-                "longitude": facility.longitude,
-                "distance_m": round(distance_m),
-                "call_number": facility.emergency_phone or facility.phone,
-                "phone": facility.phone,
-                "emergency_phone": facility.emergency_phone,
-                "crisis_services": [ServiceType(s) for s in crisis_services],
-                "verification_status": facility.verification_status,
-                "last_verified_at": facility.last_verified_at,
-                "directions_url": (
-                    "https://www.google.com/maps/dir/?api=1&destination="
-                    f"{facility.latitude:.6f},{facility.longitude:.6f}"
-                ),
-            }
-        )
-    return results
+    return await facilities.nearby(db, event.latitude, event.longitude)
 
 
 # ------------------------------------------------------------------ resolve
@@ -382,10 +304,10 @@ async def resolve_crisis(
     if event.status is not CrisisStatus.ACTIVE:
         raise ConflictError("This crisis is already closed.", code="crisis_closed")
 
-    facility = None
+    facility_name = None
     if data.outcome_facility_id is not None:
-        facility = await db.get(Facility, data.outcome_facility_id)
-        if facility is None:
+        facility_name = await facilities.facility_name(db, data.outcome_facility_id)
+        if facility_name is None:
             raise NotFoundError("Facility not found", code="facility_not_found")
 
     entry_id = None
@@ -398,15 +320,15 @@ async def resolve_crisis(
                 details={"consent_type": ConsentType.HEALTH_DATA.value, "next": "/auth/consent"},
             )
         summary = "Crisis button pressed."
-        if facility is not None:
-            summary += f" Went to {facility.name}."
+        if facility_name is not None:
+            summary += f" Went to {facility_name}."
         entry = PassportEntry(
             patient_id=event.patient_id,
             entry_type=PassportEntryType.CRISIS,
             occurred_at=event.triggered_at,
             summary=summary,
             details=data.note,
-            facility_id=facility.id if facility else None,
+            facility_id=data.outcome_facility_id,
             crisis_event_id=event.id,
             created_by=user.id,
         )
@@ -425,7 +347,7 @@ async def resolve_crisis(
     event.status = CrisisStatus.CANCELLED if data.false_alarm else CrisisStatus.RESOLVED
     event.resolved_at = _now()
     event.resolved_by = user.id
-    event.outcome_facility_id = facility.id if facility else None
+    event.outcome_facility_id = data.outcome_facility_id
     write_audit(
         db,
         action="crisis.cancel" if data.false_alarm else "crisis.resolve",
@@ -666,5 +588,6 @@ def facilities_out(event: CrisisEvent, nearby: NearbyResult) -> dict[str, Any]:
         "location_source": event.location_source,
         "radius_km": nearby.radius_km,
         "widened_search": nearby.widened,
+        "facilities_available": nearby.available,
         "facilities": nearby.facilities,
     }

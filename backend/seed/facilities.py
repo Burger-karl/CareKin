@@ -3,6 +3,9 @@
     python -m seed.facilities                  # all listings unverified (the honest default)
     python -m seed.facilities --demo-verified  # mark them verified so demos show results
 
+Needs the facilities models (facilities domain, Day 7); until they exist this exits
+with a message. Values use the ERD's column names and lowercase enum values.
+
 These are real, public hospitals, but every detail here is UNCONFIRMED:
 - coordinates are approximate and services are what we expect, not what we checked;
 - phone numbers are left empty on purpose: a wrong number in a crisis is worse than none.
@@ -129,13 +132,14 @@ FACILITIES: tuple[SeedFacility, ...] = (
 
 async def seed_facilities(db: AsyncSession, *, demo_verified: bool = False) -> int:
     """Insert missing facilities. Returns how many were added."""
-    from app.domains.facilities.models import (
-        Facility,
-        FacilityService,
-        FacilityType,
-        ServiceType,
-        VerificationStatus,
-    )
+    from app.domains.crisis.facilities import facility_models
+
+    models = facility_models()
+    if models is None:
+        raise SystemExit(
+            "The facilities models aren't built yet (facilities domain, Day 7): nothing to seed."
+        )
+    Facility, FacilityService = models
 
     if demo_verified and get_settings().ENVIRONMENT not in (
         Environment.DEVELOPMENT,
@@ -151,13 +155,11 @@ async def seed_facilities(db: AsyncSession, *, demo_verified: bool = False) -> i
             continue
         facility = Facility(
             name=item.name,
-            facility_type=FacilityType(item.facility_type),
+            facility_type=item.facility_type,
             address=item.address,
             lga=item.lga,
             location=WKTElement(f"POINT({item.lng} {item.lat})", srid=4326),
-            verification_status=(
-                VerificationStatus.VERIFIED if demo_verified else VerificationStatus.UNVERIFIED
-            ),
+            verification_status=("verified" if demo_verified else "unverified"),
             last_verified_at=now if demo_verified else None,
         )
         db.add(facility)
@@ -166,7 +168,7 @@ async def seed_facilities(db: AsyncSession, *, demo_verified: bool = False) -> i
             db.add(
                 FacilityService(
                     facility_id=facility.id,
-                    service_type=ServiceType(service),
+                    service_type=service,
                     notes=UNCONFIRMED,
                 )
             )

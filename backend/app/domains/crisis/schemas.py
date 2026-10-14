@@ -11,7 +11,6 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validato
 
 from app.config import get_settings
 from app.domains.crisis.models import AlertStatus, CrisisStatus, LocationSource
-from app.domains.facilities.models import FacilityType, ServiceType, VerificationStatus
 from app.domains.patients.models import AlertChannel
 
 
@@ -108,7 +107,7 @@ class AlertOut(BaseModel):
 class FacilityOut(BaseModel):
     id: uuid.UUID
     name: str
-    facility_type: FacilityType
+    facility_type: str = Field(examples=["teaching_hospital"])
     address: str
     latitude: float
     longitude: float
@@ -116,8 +115,8 @@ class FacilityOut(BaseModel):
     call_number: str | None = Field(description="Emergency line if listed, else main line.")
     phone: str | None
     emergency_phone: str | None
-    crisis_services: list[ServiceType]
-    verification_status: VerificationStatus
+    crisis_services: list[str] = Field(examples=[["emergency_24h", "haematologist"]])
+    verification_status: str = Field(examples=["verified"])
     last_verified_at: datetime | None
     directions_url: str
 
@@ -128,6 +127,10 @@ class FacilitiesOut(SafetyNotice):
     radius_km: float | None
     widened_search: bool = Field(
         description="Nothing verified was inside the normal radius, so a wider area was searched."
+    )
+    facilities_available: bool = Field(
+        description="False until the facility directory is live: show the emergency number "
+        "instead of 'no facilities nearby'."
     )
     facilities: list[FacilityOut]
 

@@ -8,6 +8,7 @@ import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from cryptography.fernet import Fernet
@@ -22,19 +23,13 @@ from app.core.security import create_access_token
 from app.domains.auth.models import User
 from app.domains.crisis import router as crisis_router
 from app.domains.crisis import service
+from app.domains.crisis.facilities import facilities_available
 from app.domains.crisis.models import (
     AlertStatus,
     CrisisAlert,
     CrisisEvent,
     CrisisStatus,
     LocationSource,
-)
-from app.domains.facilities.models import (
-    Facility,
-    FacilityService,
-    FacilityType,
-    ServiceType,
-    VerificationStatus,
 )
 from app.domains.passport.models import PassportEntry
 from app.domains.patients.models import Patient
@@ -56,6 +51,14 @@ from app.tests.crisis_factories import (
 )
 
 DISCLAIMER_START = "CareKin does not give medical advice"
+
+# The facilities domain (Day 7) owns the facility tables. Until its models exist, the
+# ranking tests are skipped and the "no facility directory yet" tests run instead.
+FACILITIES = facilities_available()
+needs_facilities = pytest.mark.skipif(
+    not FACILITIES, reason="facilities models not built yet (facilities domain, Day 7)"
+)
+without_facilities = pytest.mark.skipif(FACILITIES, reason="facilities models exist")
 
 
 @dataclass
@@ -130,7 +133,9 @@ async def family(db) -> Family:
 
 
 @pytest.fixture
-async def facilities(db) -> dict[str, Facility]:
+async def facilities(db) -> dict[str, Any]:
+    if not FACILITIES:
+        pytest.skip("facilities models not built yet")
     lat, lng = ENUGU
     return {
         "near": await make_facility(db, "Near General", lat + 0.01, lng),
@@ -139,16 +144,14 @@ async def facilities(db) -> dict[str, Facility]:
             "Mid Teaching",
             lat + 0.03,
             lng,
-            services=(ServiceType.HAEMATOLOGIST, ServiceType.TRANSFUSION),
+            services=("haematologist", "transfusion"),
         ),
-        "stale": await make_facility(
-            db, "Stale Clinic", lat + 0.05, lng, status=VerificationStatus.STALE
-        ),
+        "stale": await make_facility(db, "Stale Clinic", lat + 0.05, lng, status="stale"),
         "unverified": await make_facility(
-            db, "Unverified Close", lat + 0.004, lng, status=VerificationStatus.UNVERIFIED
+            db, "Unverified Close", lat + 0.004, lng, status="unverified"
         ),
         "lab_only": await make_facility(
-            db, "Lab Only", lat + 0.007, lng, services=(ServiceType.GENOTYPE_TESTING,)
+            db, "Lab Only", lat + 0.007, lng, services=("genotype_testing",)
         ),
         "closed_er": await make_facility(db, "Closed ER", lat + 0.005, lng, available=False),
     }
@@ -173,9 +176,7 @@ async def press(api, family: Family, who: User | None = None, **kwargs):
 
 
 # ------------------------------------------------------------------ trigger
-async def test_trigger_alerts_contacts_and_returns_nearest_verified_facilities(
-    api, family, facilities, sms
-):
+async def test_trigger_alerts_contacts(api, family, sms):
     resp = await press(api, family)
 
     assert resp.status_code == 201, resp.text
@@ -191,7 +192,20 @@ async def test_trigger_alerts_contacts_and_returns_nearest_verified_facilities(
     assert all("*" in a["phone"] for a in body["alerts"])  # masked in the API
     assert body["no_contacts"] is False
 
-    nearby = body["nearby"]
+    assert body["nearby"]["facilities_available"] is FACILITIES
+
+    # Background delivery has run: both alerts sent by SMS.
+    alerts = await rows(CrisisAlert)
+    assert {a.status for a in alerts} == {AlertStatus.SENT}
+    assert all(a.provider_ref and a.sent_at and a.attempts == 1 for a in alerts)
+    assert sorted(m.to for m in sms.outbox) == sorted([family.mum.phone, family.aunt_phone])
+
+
+@needs_facilities
+async def test_nearest_verified_facilities_are_listed_first(api, family, facilities):
+    nearby = (await press(api, family)).json()["nearby"]
+
+    # Unverified, lab-only and closed-ER listings are left out; stale ones stay (FF-5).
     assert [f["name"] for f in nearby["facilities"]] == [
         "Near General",
         "Mid Teaching",
@@ -202,13 +216,32 @@ async def test_trigger_alerts_contacts_and_returns_nearest_verified_facilities(
     assert 1000 < first["distance_m"] < 1250
     assert first["call_number"] == facilities["near"].emergency_phone
     assert first["directions_url"].startswith("https://www.google.com/maps/dir/?api=1&destination=")
+    assert first["latitude"] == pytest.approx(ENUGU[0] + 0.01)
     assert nearby["facilities"][1]["crisis_services"] == ["haematologist", "transfusion"]
+    assert nearby["facilities"][2]["verification_status"] == "stale"
 
-    # Background delivery has run: both alerts sent by SMS.
-    alerts = await rows(CrisisAlert)
-    assert {a.status for a in alerts} == {AlertStatus.SENT}
-    assert all(a.provider_ref and a.sent_at and a.attempts == 1 for a in alerts)
-    assert sorted(m.to for m in sms.outbox) == sorted([family.mum.phone, family.aunt_phone])
+
+@without_facilities
+async def test_without_the_facility_directory_crisis_still_works(api, family, sms):
+    created = await press(api, family)
+
+    assert created.status_code == 201
+    nearby = created.json()["nearby"]
+    assert nearby["facilities_available"] is False
+    assert nearby["facilities"] == [] and nearby["radius_km"] is None
+    assert len(sms.outbox) == 2  # alerts don't depend on facilities
+    event_id = created.json()["id"]
+    listing = await api.get(f"/crisis/events/{event_id}/facilities", headers=auth(family.mum))
+    assert listing.status_code == 200 and listing.json()["facilities_available"] is False
+
+    # No facility can be named yet, so an outcome facility is "not found".
+    resolve = await api.post(
+        f"/crisis/events/{event_id}/resolve",
+        json={"outcome_facility_id": str(uuid.uuid4())},
+        headers=auth(family.mum),
+    )
+    assert resolve.status_code == 404
+    assert resolve.json()["error"]["code"] == "facility_not_found"
 
 
 async def test_alert_text_is_short_private_and_gives_no_medical_advice(api, family, sms):
@@ -465,6 +498,7 @@ async def test_naive_timestamps_and_unknown_fields_are_rejected(api, family):
 
 
 # ------------------------------------------------------------------ facilities
+@needs_facilities
 async def test_search_widens_when_nothing_verified_is_close(api, db, family):
     await make_facility(db, "Far Away Teaching", ENUGU[0] + 0.72, ENUGU[1])  # ~80 km
     nearby = (await press(api, family)).json()["nearby"]
@@ -472,12 +506,14 @@ async def test_search_widens_when_nothing_verified_is_close(api, db, family):
     assert [f["name"] for f in nearby["facilities"]] == ["Far Away Teaching"]
 
 
+@needs_facilities
 async def test_nothing_within_the_widest_radius(api, db, family):
     await make_facility(db, "Lagos", 6.5244, 3.3792)  # ~460 km away
     nearby = (await press(api, family)).json()["nearby"]
     assert nearby["facilities"] == [] and nearby["widened_search"] is True
 
 
+@needs_facilities
 async def test_facility_list_is_capped(api, db, family, monkeypatch):
     monkeypatch.setattr(get_settings(), "CRISIS_FACILITY_LIMIT", 3)
     for i in range(6):
@@ -492,19 +528,22 @@ async def test_facility_list_is_capped(api, db, family, monkeypatch):
     assert [f["name"] for f in again.json()["facilities"]] == names
 
 
+@needs_facilities
 async def test_trigger_is_fast_with_many_facilities(api, db, family):
+    from app.domains.facilities.models import Facility, FacilityService
+
     for i in range(300):
         facility = Facility(
             name=f"Bulk {i}",
-            facility_type=FacilityType.CLINIC,
+            facility_type="clinic",
             address="Enugu",
             phone=phone(),
             location=point(ENUGU[0] + (i % 30) * 0.02, ENUGU[1] + (i // 30) * 0.02),
-            verification_status=VerificationStatus.VERIFIED,
+            verification_status="verified",
         )
         db.add(facility)
         await db.flush()
-        db.add(FacilityService(facility_id=facility.id, service_type=ServiceType.EMERGENCY_24H))
+        db.add(FacilityService(facility_id=facility.id, service_type="emergency_24h"))
     await db.commit()
 
     start = time.perf_counter()
@@ -668,38 +707,53 @@ def test_beat_schedules_the_sweep():
 
 
 # ------------------------------------------------------------------ resolve
-async def test_resolve_with_consent_writes_an_encrypted_passport_entry(api, db, family, facilities):
+async def test_resolve_with_consent_writes_an_encrypted_passport_entry(api, db, family):
     await grant_consent(db, family.mum)
     event_id = (await press(api, family)).json()["id"]
 
     resp = await api.post(
         f"/crisis/events/{event_id}/resolve",
-        json={
-            "outcome_facility_id": str(facilities["near"].id),
-            "add_to_passport": True,
-            "note": "Started after a long bus journey",
-        },
+        json={"add_to_passport": True, "note": "Started after a long bus journey"},
         headers=auth(family.mum),
     )
 
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["status"] == "resolved" and body["resolved_at"]
-    assert body["outcome_facility_id"] == str(facilities["near"].id)
+    assert body["outcome_facility_id"] is None
     (entry,) = await rows(PassportEntry)
     assert str(entry.id) == body["passport_entry_id"]
-    assert entry.summary == "Crisis button pressed. Went to Near General."
+    assert entry.summary == "Crisis button pressed."
     assert entry.details == "Started after a long bus journey"
     assert entry.crisis_event_id == uuid.UUID(event_id)
-    assert entry.created_by == family.mum.id
+    assert entry.created_by == family.mum.id and entry.facility_id is None
     async with database.engine.connect() as conn:
         raw_details, raw_summary = (
             await conn.execute(text("SELECT details, summary FROM passport_entries"))
         ).one()
     assert b"bus journey" not in bytes(raw_details)  # ciphertext at rest (HP-4)
-    assert b"Near General" not in bytes(raw_summary)
+    assert b"Crisis button" not in bytes(raw_summary)
     (event,) = await rows(CrisisEvent)
     assert event.resolved_by == family.mum.id and event.status is CrisisStatus.RESOLVED
+
+
+@needs_facilities
+async def test_resolve_can_name_the_facility_they_went_to(api, db, family, facilities):
+    await grant_consent(db, family.mum)
+    event_id = (await press(api, family)).json()["id"]
+    near = str(facilities["near"].id)
+
+    resp = await api.post(
+        f"/crisis/events/{event_id}/resolve",
+        json={"outcome_facility_id": near, "add_to_passport": True},
+        headers=auth(family.mum),
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["outcome_facility_id"] == near
+    (entry,) = await rows(PassportEntry)
+    assert entry.summary == "Crisis button pressed. Went to Near General."
+    assert str(entry.facility_id) == near
 
 
 @pytest.mark.parametrize("consent", [None, "revoked", "withdrawn_later", "old_policy"])
