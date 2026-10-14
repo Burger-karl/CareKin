@@ -209,6 +209,11 @@ class Certification(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="certifications", lazy="raise"
     )
 
+    @property
+    def has_document(self) -> bool:
+        """Schemas expose this instead of the private storage key."""
+        return self.document_key is not None
+
 
 class VerificationCheck(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """One vetting step (NIN, background, ...) and its outcome (TS-1)."""
