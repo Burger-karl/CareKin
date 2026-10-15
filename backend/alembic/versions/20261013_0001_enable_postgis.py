@@ -16,6 +16,7 @@ Create Date: 2026-10-13
 
 from collections.abc import Sequence
 
+import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0001"
@@ -29,4 +30,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DROP EXTENSION IF EXISTS postgis")
+    # The postgis/postgis image also installs extensions that depend on postgis
+    # (topology, TIGER geocoder). Dropping it then fails, so leave it in place.
+    dependents = op.get_bind().scalar(
+        sa.text(
+            "SELECT count(*) FROM pg_extension WHERE extname IN "
+            "('postgis_topology', 'postgis_tiger_geocoder', 'postgis_raster')"
+        )
+    )
+    if not dependents:
+        op.execute("DROP EXTENSION IF EXISTS postgis")
