@@ -63,7 +63,7 @@ FACILITIES: tuple[SeedFacility, ...] = (
         "Enugu North",
         6.4512,
         7.5033,
-        ("emergency_24h", "haematologist", "transfusion", "genotype_testing"),
+        ("emergency_24h", "haematology", "transfusion", "genotype_testing"),
     ),
     SeedFacility(
         "National Orthopaedic Hospital, Enugu",
