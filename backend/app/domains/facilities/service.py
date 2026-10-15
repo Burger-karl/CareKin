@@ -123,8 +123,12 @@ async def commit_and_refresh(
 async def create_facility(
     db: AsyncSession,
     data: FacilityCreate,
+    claimed_by: uuid.UUID | None = None,
 ) -> Facility:
-    """Register a facility with an initially unverified status."""
+    """Register a facility with an initially unverified status.
+
+    `claimed_by` is the facility admin who will manage it; None for ops-created listings.
+    """
 
     location = None
 
@@ -142,6 +146,7 @@ async def create_facility(
         location=location,
         verification_status=VerificationStatus.PENDING,
         location_verified=False,
+        claimed_by=claimed_by,
     )
 
     db.add(facility)
