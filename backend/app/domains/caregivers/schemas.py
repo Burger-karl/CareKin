@@ -13,6 +13,7 @@ Three views of a caregiver exist on purpose:
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -23,7 +24,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    computed_field,
+    SecretStr,
     model_validator,
 )
 
@@ -225,6 +226,10 @@ class VerifyRequest(StrictModel):
         min_length=1,
         description="Which checks to run. Defaults to nin and background.",
     )
+    nin: SecretStr | None = Field(
+        default=None,
+        description="The caregiver's 11-digit NIN. Sent to the provider, never stored.",
+    )
 
     @model_validator(mode="after")
     def _check(self) -> VerifyRequest:
@@ -234,6 +239,14 @@ class VerifyRequest(StrictModel):
         if unsupported:
             allowed = ", ".join(c.value for c in VERIFIABLE_CHECKS)
             raise ValueError(f"Cannot run {', '.join(unsupported)} here. Allowed: {allowed}")
+        wants_nin = CheckType.NIN in self.checks
+        if wants_nin and self.nin is None:
+            raise ValueError("The nin check needs the caregiver's NIN")
+        if self.nin is not None:
+            if not wants_nin:
+                raise ValueError("Send nin only when running the nin check")
+            if not re.fullmatch(r"\d{11}", self.nin.get_secret_value()):
+                raise ValueError("A NIN is exactly 11 digits")
         return self
 
 
@@ -260,15 +273,10 @@ class CertificationOut(BaseModel):
     issuer: str | None
     licence_number: str | None
     status: ReviewStatus
+    has_document: bool
     expires_at: date | None
     verified_at: datetime | None
     created_at: datetime
-    document_key: str | None = Field(default=None, exclude=True)
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def has_document(self) -> bool:
-        return self.document_key is not None
 
 
 class PublicCertificationOut(BaseModel):
