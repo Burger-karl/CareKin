@@ -17,7 +17,7 @@ verification), Paystack, S3. Feature days (6 to 15) can't wait for any of them.
 1. Each partner has a module in `app/integrations/` (S3 in `app/core/storage.py`) with:
    - a `Protocol` describing the calls the app makes;
    - a **mock** that is deterministic. Documented inputs produce each outcome, e.g. a
-     NIN ending in 0 is "not found" and ending in 9 is a provider outage, so every path
+     NIN ending in 0000 is "not found" and ending in 9999 is a provider outage, so every path
      can be tested and demoed;
    - a real client where the provider is settled: Termii SMS, WhatsApp Cloud API,
      Paystack, S3;

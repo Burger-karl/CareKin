@@ -2,95 +2,62 @@
 
 The provider is open decision Topic 6. Until it is chosen, only the mock exists.
 
-Checks are asynchronous at real providers: `request_check` returns a reference with
-status `requested`, and `get_result` is polled (or a webhook arrives) until it is
-`passed` or `failed`. Statuses match the caregivers domain's CheckStatus. Results carry
-an outcome only, never the provider's full report: anything adverse goes to a human
-in the ops console, and approval is always a human decision (PRD section 6).
+Used by caregivers.service: `await client.verify(full_name=..., phone=...)` returns a
+BackgroundCheckResult with `passed`, `reference` and a short `detail`. Results carry an
+outcome only, never the provider's full report: anything adverse goes to a human in
+the ops console, and approval is always a human decision (PRD section 6). Provider
+outages raise IntegrationError (a ServiceUnavailableError).
 
-Mock rules (by the subject phone number's last digit):
-    7   failed (needs human review)
-    8   stays `requested` (provider still working)
-    9   request fails (IntegrationError)
-    any other digit: passed
-The outcome is encoded in the mock reference, so any process can poll it.
+When a real provider is chosen: most run checks asynchronously. Its client can submit
+here and return `passed=False, detail="pending"`, or the caregivers flow can grow a
+webhook; decide with the caregivers owner.
+
+Mock rules (by the subject's name, case-insensitive), deterministic for tests and demos:
+    contains "flagged"   failed: a record needs human review
+    contains "outage"    provider outage (IntegrationError)
+    anything else        passed
 """
 
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
-from datetime import UTC, date, datetime
-from enum import StrEnum
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from app.config import get_settings
 from app.integrations.base import IntegrationError, not_configured
 
 
-class BackgroundCheckStatus(StrEnum):
-    REQUESTED = "requested"
-    PASSED = "passed"
-    FAILED = "failed"
-
-
-@dataclass(frozen=True, slots=True)
-class BackgroundCheckSubject:
-    full_name: str
-    phone: str  # E.164
-    date_of_birth: date | None = None
-
-
 @dataclass(frozen=True, slots=True)
 class BackgroundCheckResult:
-    provider: str
-    provider_ref: str
-    status: BackgroundCheckStatus
-    summary: str | None = None  # short, non-sensitive; never the full report
-    completed_at: datetime | None = None
+    passed: bool
+    reference: str
+    detail: str  # short and non-sensitive; never the provider's report
 
 
 class BackgroundCheckClient(Protocol):
-    async def request_check(self, subject: BackgroundCheckSubject) -> BackgroundCheckResult:
-        """Start a check. Raises IntegrationError if the provider refuses."""
+    name: str
+
+    async def verify(self, *, full_name: str, phone: str) -> BackgroundCheckResult:
+        """Run a check on this person. Raises IntegrationError on outage."""
         ...
 
-    async def get_result(self, provider_ref: str) -> BackgroundCheckResult:
-        """Current status of a check started earlier."""
-        ...
 
-
+@dataclass
 class MockBackgroundCheckClient:
-    provider = "mock"
+    name: str = "mock"
+    lookups: int = field(default=0)  # tests check the provider was (or wasn't) called
 
-    async def request_check(self, subject: BackgroundCheckSubject) -> BackgroundCheckResult:
-        digit = subject.phone[-1:]
-        if digit == "9":
-            raise IntegrationError(self.provider, "simulated background-check outage")
-        seed = f"{subject.full_name}|{subject.phone}".encode()
-        ref = f"mock-bg-{hashlib.sha256(seed).hexdigest()[:12]}-{digit}"
-        return BackgroundCheckResult(self.provider, ref, BackgroundCheckStatus.REQUESTED)
-
-    async def get_result(self, provider_ref: str) -> BackgroundCheckResult:
-        if not provider_ref.startswith("mock-bg-"):
-            raise IntegrationError(self.provider, "unknown check reference", retryable=False)
-        digit = provider_ref[-1]
-        if digit == "8":
-            return BackgroundCheckResult(
-                self.provider, provider_ref, BackgroundCheckStatus.REQUESTED
-            )
-        now = datetime.now(UTC)
-        if digit == "7":
-            return BackgroundCheckResult(
-                self.provider,
-                provider_ref,
-                BackgroundCheckStatus.FAILED,
-                summary="Record found that needs human review",
-                completed_at=now,
-            )
-        return BackgroundCheckResult(
-            self.provider, provider_ref, BackgroundCheckStatus.PASSED, completed_at=now
-        )
+    async def verify(self, *, full_name: str, phone: str) -> BackgroundCheckResult:
+        self.lookups += 1
+        lowered = full_name.lower()
+        if "outage" in lowered:
+            raise IntegrationError(self.name, "simulated background-check outage")
+        seed = f"{full_name}|{phone}".encode()
+        reference = "mock-bg-" + hashlib.sha256(seed).hexdigest()[:12]
+        if "flagged" in lowered:
+            return BackgroundCheckResult(False, reference, "Record found that needs human review")
+        return BackgroundCheckResult(True, reference, "No records found")
 
 
 _mock_client = MockBackgroundCheckClient()

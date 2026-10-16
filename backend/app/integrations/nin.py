@@ -3,23 +3,25 @@
 The provider is open decision Topic 6 (e.g. NIMC via a licensed verifier such as
 Prembly, Dojah or VerifyMe). Until it is chosen, only the mock exists.
 
-A NIN is sensitive personal data under the NDPA: results carry the last 4 digits only,
-and callers must never store or log the full number.
+Used by caregivers.service: `await client.verify(nin, full_name=...)` returns a
+NINResult with `passed`, `reference` and a short `detail`; provider outages raise
+IntegrationError (a ServiceUnavailableError), which the caller records as `error`.
 
-Mock rules (by the NIN's last digit), so every outcome can be demoed and tested:
-    0   no record found
-    1   record found, name doesn't match
-    2   record found, date of birth doesn't match
-    9   provider error (IntegrationError)
-    any other digit: full match
+A NIN is sensitive personal data under the NDPA: results carry the last 4 digits only,
+and nothing here stores or logs the full number.
+
+Mock rules (by the NIN's last 4 digits), so every outcome can be demoed and tested:
+    0000   no record found                  -> passed False
+    1111   record found, name doesn't match -> passed False
+    9999   provider outage                  -> IntegrationError
+    any other NIN: match                    -> passed True
 """
 
 from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from app.config import get_settings
@@ -34,23 +36,17 @@ class InvalidNIN(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class NINResult:
-    found: bool
-    name_matches: bool
-    dob_matches: bool
+    passed: bool  # a record exists and the name matches
+    reference: str  # the provider's reference; the NIN can't be recovered from it
+    detail: str  # short and non-sensitive, safe to store on the check
     nin_last4: str
-    provider: str
-    provider_ref: str
-
-    @property
-    def verified(self) -> bool:
-        return self.found and self.name_matches and self.dob_matches
 
 
 class NINClient(Protocol):
-    async def verify(
-        self, nin: str, *, first_name: str, last_name: str, date_of_birth: date
-    ) -> NINResult:
-        """Check the NIN against the national register. Raises IntegrationError on failure."""
+    name: str
+
+    async def verify(self, nin: str, *, full_name: str) -> NINResult:
+        """Check the NIN against the national register. Raises IntegrationError on outage."""
         ...
 
 
@@ -61,26 +57,23 @@ def clean_nin(nin: str) -> str:
     return digits
 
 
+@dataclass
 class MockNINClient:
-    provider = "mock"
+    name: str = "mock"
+    lookups: int = field(default=0)  # tests check the provider was (or wasn't) called
 
-    async def verify(
-        self, nin: str, *, first_name: str, last_name: str, date_of_birth: date
-    ) -> NINResult:
+    async def verify(self, nin: str, *, full_name: str) -> NINResult:
+        self.lookups += 1
         digits = clean_nin(nin)
-        last = digits[-1]
-        if last == "9":
-            raise IntegrationError(self.provider, "simulated NIN provider outage")
-        found = last != "0"
-        return NINResult(
-            found=found,
-            name_matches=found and last != "1",
-            dob_matches=found and last != "2",
-            nin_last4=digits[-4:],
-            provider=self.provider,
-            # Stable per NIN, but the NIN can't be recovered from it.
-            provider_ref="mock-nin-" + hashlib.sha256(digits.encode()).hexdigest()[:12],
-        )
+        last4 = digits[-4:]
+        if last4 == "9999":
+            raise IntegrationError(self.name, "simulated NIN provider outage")
+        reference = "mock-nin-" + hashlib.sha256(digits.encode()).hexdigest()[:12]
+        if last4 == "0000":
+            return NINResult(False, reference, "No record found for this NIN", last4)
+        if last4 == "1111":
+            return NINResult(False, reference, "NIN record name does not match", last4)
+        return NINResult(True, reference, "NIN record matches", last4)
 
 
 _mock_client = MockNINClient()

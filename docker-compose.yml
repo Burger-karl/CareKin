@@ -41,5 +41,30 @@ services:
     volumes:
       - ./backend:/code
 
+  # Celery: background jobs. Beat runs crisis.sweep_alerts every 30 s to retry
+  # crisis SMS that failed. Crisis alerts are first sent by the API itself, so the
+  # button still works if these two are down; they only add the retries.
+  worker:
+    build: ./backend
+    env_file: .env
+    command: celery -A app.worker worker --loglevel=info
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/code
+
+  beat:
+    build: ./backend
+    env_file: .env
+    command: celery -A app.worker beat --loglevel=info --schedule /tmp/celerybeat-schedule
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/code
+
 volumes:
   pgdata:

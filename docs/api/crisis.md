@@ -47,6 +47,9 @@ The person who pressed is never texted about their own press. Guardians who turn
 Without `location`, the patient's home location is used (`location.source == "home"`), else `"none"`.
 `location.stale` is `true` when the GPS fix was taken more than 5 minutes before the press.
 
+`nearby.facilities_available` is `false` until the facility directory (Day 7) is live. Until
+then the list is always empty: show the emergency number instead of "no facilities nearby".
+
 `nearby.facilities` lists up to 5 **verified** facilities with a 24-hour emergency unit, a
 haematologist or transfusion, nearest first, within 50 km. If none, the search widens once to
 150 km and `widened_search` is `true`. Use `call_number` for the call button and

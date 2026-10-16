@@ -8,7 +8,9 @@ Every partner sits behind a Protocol with a deterministic mock, picked by a
                                   if its keys are missing or no provider is chosen yet
 
 Clients raise IntegrationError when the partner fails or refuses; callers decide
-whether to retry. They never log personal data or secrets.
+whether to retry. It is a ServiceUnavailableError, so callers can catch either, and if
+nobody catches it the API answers 503 "provider_unavailable" instead of a 500.
+Clients never log personal data or secrets.
 """
 
 from __future__ import annotations
@@ -20,8 +22,10 @@ import httpx
 from app.core.exceptions import ServiceUnavailableError
 
 
-class IntegrationError(Exception):
+class IntegrationError(ServiceUnavailableError):
     """A partner call failed (network, HTTP error, unexpected response)."""
+
+    code = "provider_unavailable"
 
     def __init__(self, provider: str, message: str, *, retryable: bool = True) -> None:
         super().__init__(f"{provider}: {message}")

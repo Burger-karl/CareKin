@@ -39,7 +39,10 @@ class EscrowStatus(StrEnum):
 
 
 class EscrowStateError(IntegrationError):
-    """The requested move isn't allowed from the escrow's current status."""
+    """The requested move isn't allowed from the escrow's current status (409, not 503)."""
+
+    status_code = 409
+    code = "escrow_state_conflict"
 
     def __init__(self, provider: str, message: str) -> None:
         super().__init__(provider, message, retryable=False)

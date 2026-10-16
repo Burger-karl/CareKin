@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from datetime import date
 
 import httpx
 import pytest
@@ -11,7 +10,6 @@ import pytest
 from app.config import Settings, get_settings
 from app.core.exceptions import ServiceUnavailableError
 from app.integrations import background_check, escrow, nin, payments, whatsapp
-from app.integrations.background_check import BackgroundCheckStatus, BackgroundCheckSubject
 from app.integrations.base import IntegrationError, request_json
 from app.integrations.escrow import EscrowStateError, EscrowStatus, MockEscrowClient
 from app.integrations.payments import (
@@ -30,8 +28,6 @@ from app.integrations.whatsapp import (
     parse_incoming,
     sign_body,
 )
-
-DOB = date(1990, 3, 14)
 
 
 def transport(handler, seen: list[httpx.Request] | None = None) -> httpx.MockTransport:
@@ -77,70 +73,56 @@ async def test_request_json_network_error():
 
 # ------------------------------------------------------------------ NIN
 @pytest.mark.parametrize(
-    ("number", "found", "name", "dob", "verified"),
+    ("number", "passed", "detail"),
     [
-        ("12345678903", True, True, True, True),
-        ("12345678900", False, False, False, False),
-        ("12345678901", True, False, True, False),
-        ("12345678902", True, True, False, False),
+        ("12345678901", True, "NIN record matches"),
+        ("12345670000", False, "No record found for this NIN"),
+        ("12345671111", False, "NIN record name does not match"),
     ],
 )
-async def test_mock_nin_outcomes(number, found, name, dob, verified):
-    result = await nin.MockNINClient().verify(
-        number, first_name="Ada", last_name="Eze", date_of_birth=DOB
-    )
-    assert (result.found, result.name_matches, result.dob_matches, result.verified) == (
-        found,
-        name,
-        dob,
-        verified,
-    )
-    assert result.nin_last4 == number[-4:]
-    assert number not in result.provider_ref  # the full NIN is never carried around
-
-
-async def test_mock_nin_outage_and_validation():
+async def test_mock_nin_outcomes(number, passed, detail):
     client = nin.MockNINClient()
-    with pytest.raises(IntegrationError, match="outage"):
-        await client.verify("12345678909", first_name="A", last_name="B", date_of_birth=DOB)
+    result = await client.verify(number, full_name="Ada Eze")
+    assert (result.passed, result.detail, result.nin_last4) == (passed, detail, number[-4:])
+    assert result.reference.startswith("mock-nin-")
+    assert number not in result.reference and number not in result.detail  # NDPA
+    assert client.lookups == 1 and client.name == "mock"
+
+
+async def test_mock_nin_outage_is_a_service_unavailable_error():
+    client = nin.MockNINClient()
+    with pytest.raises(ServiceUnavailableError) as exc:  # what caregivers catches
+        await client.verify("12345679999", full_name="Ada Eze")
+    assert isinstance(exc.value, IntegrationError) and exc.value.code == "provider_unavailable"
+    assert exc.value.status_code == 503
     with pytest.raises(nin.InvalidNIN):
-        await client.verify("1234", first_name="A", last_name="B", date_of_birth=DOB)
+        await client.verify("1234", full_name="Ada Eze")
     assert nin.clean_nin("123 4567-8903") == "12345678903"
 
 
 # ------------------------------------------------------------------ background checks
 @pytest.mark.parametrize(
-    ("phone", "status"),
-    [
-        ("+2348030000001", BackgroundCheckStatus.PASSED),
-        ("+2348030000007", BackgroundCheckStatus.FAILED),
-        ("+2348030000008", BackgroundCheckStatus.REQUESTED),
-    ],
+    ("name", "passed"),
+    [("Ada Eze", True), ("Flagged Person", False), ("someone FLAGGED", False)],
 )
-async def test_mock_background_check_outcomes(phone, status):
+async def test_mock_background_check_outcomes(name, passed):
     client = background_check.MockBackgroundCheckClient()
-    started = await client.request_check(BackgroundCheckSubject("Ada Eze", phone, DOB))
-    assert started.status is BackgroundCheckStatus.REQUESTED
-
-    # A different instance (another process) can poll the same reference.
-    result = await background_check.MockBackgroundCheckClient().get_result(started.provider_ref)
-    assert result.status is status
-    assert (result.completed_at is None) is (status is BackgroundCheckStatus.REQUESTED)
-    assert set(BackgroundCheckStatus) <= {
-        "requested",
-        "passed",
-        "failed",
-        "error",
-    }  # ERD check_status
+    result = await client.verify(full_name=name, phone="+2348030000001")
+    assert result.passed is passed and result.reference.startswith("mock-bg-")
+    assert client.lookups == 1 and client.name == "mock"
+    # Same person, same reference: retries don't look like new subjects.
+    again = await client.verify(full_name=name, phone="+2348030000001")
+    assert again.reference == result.reference
 
 
-async def test_mock_background_check_outage_and_unknown_ref():
+async def test_mock_background_check_outage():
     client = background_check.MockBackgroundCheckClient()
-    with pytest.raises(IntegrationError):
-        await client.request_check(BackgroundCheckSubject("Ada", "+2348030000009"))
-    with pytest.raises(IntegrationError) as exc:
-        await client.get_result("someone-elses-ref")
-    assert exc.value.retryable is False
+    with pytest.raises(ServiceUnavailableError):
+        await client.verify(full_name="Provider Outage", phone="+2348030000009")
+    # Phone numbers never trigger outcomes (test users get sequential numbers).
+    for digit in "0123456789":
+        result = await client.verify(full_name="Ada Eze", phone=f"+234803000000{digit}")
+        assert result.passed
 
 
 # ------------------------------------------------------------------ escrow
@@ -158,8 +140,9 @@ async def test_escrow_happy_path_and_idempotency():
     assert record.status is EscrowStatus.PENDING and record.currency == "NGN"
     assert await client.create(**kwargs) == record  # retried create returns the same escrow
 
-    with pytest.raises(EscrowStateError, match="can't release an escrow that is pending"):
+    with pytest.raises(EscrowStateError, match="can't release an escrow that is pending") as exc:
         await client.release(record.escrow_ref)
+    assert exc.value.status_code == 409 and exc.value.code == "escrow_state_conflict"
 
     client.simulate_funding(record.escrow_ref)
     released = await client.release(record.escrow_ref)
