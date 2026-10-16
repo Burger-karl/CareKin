@@ -83,6 +83,14 @@ class Facility(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         server_default=text("false"),
     )
 
+    # Facility admin who registered the listing and may manage it.
+    # Null for listings created by ops and not yet claimed.
+    claimed_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     services: Mapped[list[FacilityService]] = relationship(
         back_populates="facility",
         lazy="raise",
