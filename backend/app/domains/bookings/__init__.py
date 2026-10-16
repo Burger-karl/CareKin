@@ -1,1 +1,1 @@
-"""bookings: Booking, Shift, CheckIn, Escrow."""
+"""bookings: Booking, GuardianApproval, Shift, CheckIn, Review, CareNote. Escrow lives in payments."""
