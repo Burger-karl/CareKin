@@ -14,6 +14,7 @@ from geoalchemy2.elements import WKBElement
 from pydantic import ValidationError
 from sqlalchemy import select, text
 
+from app.core import encryption
 from app.core.audit import AuditLog
 from app.core.permissions import UserRole
 from app.core.security import create_access_token
@@ -25,7 +26,7 @@ from app.domains.patients import models, schemas, service
 def fernet(monkeypatch):
     """Tests don't set FIELD_ENCRYPTION_KEY; use a throwaway key."""
     key = Fernet(Fernet.generate_key())
-    monkeypatch.setattr(models, "_fernet", lambda: key)
+    monkeypatch.setattr(encryption, "_fernet", lambda: key)
     return key
 
 
@@ -56,7 +57,7 @@ def test_encrypted_text_round_trip():
 def test_encrypted_text_wrong_key_fails(monkeypatch):
     stored = models.EncryptedText().process_bind_param("SS", None)
     other = Fernet(Fernet.generate_key())
-    monkeypatch.setattr(models, "_fernet", lambda: other)
+    monkeypatch.setattr(encryption, "_fernet", lambda: other)
     with pytest.raises(RuntimeError, match="decrypt"):
         models.EncryptedText().process_result_value(stored, None)
 

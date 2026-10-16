@@ -24,6 +24,12 @@ API: http://localhost:8000/api/v1 · Docs: http://localhost:8000/docs
 
 The backend container applies migrations (`alembic upgrade head`) on start.
 Auth API contract for web and mobile: [`docs/api/auth.md`](docs/api/auth.md).
+Crisis button contract: [`docs/api/crisis.md`](docs/api/crisis.md).
+
+Compose also starts a Celery `worker` and `beat`. Beat retries crisis SMS that failed
+(`crisis.sweep_alerts`, every 30 s). Crisis alerts are first sent by the API itself, so
+the button keeps working if Redis or Celery is down. Locally, SMS is mocked
+(`USE_MOCK_INTEGRATIONS=true`); production refuses a mocked SMS provider.
 
 ### Backend tests
 
@@ -31,6 +37,18 @@ Auth API contract for web and mobile: [`docs/api/auth.md`](docs/api/auth.md).
 docker compose up -d db redis        # Postgres + Redis; creates carekin_test on first run
 cd backend && pip install -e ".[dev]" && pytest
 ```
+
+### Demo data
+
+```bash
+cd backend
+python -m seed.facilities --demo-verified   # Enugu facilities (unconfirmed; verified for demos only)
+python -m seed.crisis_simulator --presses 5 # presses the crisis button end to end, never sends real SMS
+```
+
+Seeds refuse to run in production. Partners (NIN, background checks, escrow, payments,
+WhatsApp, S3) run on deterministic mocks while `USE_MOCK_INTEGRATIONS=true`; see
+[ADR 0004](docs/adr/0004-integrations-behind-mocks.md) for what each mock does.
 
 ## Ground rules
 

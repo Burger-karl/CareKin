@@ -1,20 +1,26 @@
-"""SMS delivery (OTP codes now; crisis alerts on Day 8).
+"""SMS delivery: OTP codes and crisis alerts.
 
-The provider is not chosen yet (Termii, Africa's Talking and Twilio are the usual
-options for Nigeria). Until it is, USE_MOCK_INTEGRATIONS=true routes every
-message to MockSMSClient, which records messages in memory and logs a masked
-copy. Adding the real provider means writing one class with `send()` and
-returning it from get_sms_client(); nothing else changes.
+Settings.sms_provider picks the client:
+    mock    MockSMSClient records messages in memory and logs a masked copy.
+            The default while USE_MOCK_INTEGRATIONS=true. Refused in production.
+    termii  TermiiSMSClient, sent on Termii's "dnd" channel. Numbers on Nigeria's
+            Do-Not-Disturb register silently drop "generic" messages, and an OTP or
+            a crisis alert must reach them. The dnd channel needs an approved sender ID.
+
+Every client raises SMSDeliveryError when a message isn't accepted; callers may retry.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Protocol
 
-from app.config import get_settings
+import httpx
+
+from app.config import Settings, get_settings
 from app.core.exceptions import ServiceUnavailableError
 from app.core.phone import mask_phone
 
@@ -27,6 +33,13 @@ class SentMessage:
     body: str
     provider_ref: str
     sent_at: datetime
+
+
+class SMSDeliveryError(Exception):
+    """The provider didn't accept the message. Safe to retry."""
+
+
+_E164 = re.compile(r"^\+[1-9]\d{7,14}$")
 
 
 class SMSClient(Protocol):
@@ -60,14 +73,62 @@ class MockSMSClient:
         return None
 
 
+class TermiiSMSClient:
+    """Termii Messaging API: POST {base_url}/api/sms/send."""
+
+    def __init__(self, settings: Settings, transport: httpx.AsyncBaseTransport | None = None):
+        if not (settings.SMS_PROVIDER_API_KEY and settings.SMS_PROVIDER_BASE_URL):
+            raise SMSDeliveryError("Termii needs SMS_PROVIDER_API_KEY and SMS_PROVIDER_BASE_URL")
+        self._api_key = settings.SMS_PROVIDER_API_KEY.get_secret_value()
+        self._url = settings.SMS_PROVIDER_BASE_URL.rstrip("/") + "/api/sms/send"
+        self._sender = settings.SMS_SENDER_ID
+        self._timeout = settings.SMS_TIMEOUT_SECONDS
+        self._transport = transport
+
+    async def send(self, to: str, body: str) -> SentMessage:
+        if not _E164.match(to):
+            raise SMSDeliveryError("Phone number must be in E.164 format")
+        payload = {
+            "api_key": self._api_key,
+            "to": to.lstrip("+"),  # Termii wants the international number without "+"
+            "from": self._sender,
+            "sms": body,
+            "type": "plain",
+            "channel": "dnd",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout, transport=self._transport) as http:
+                response = await http.post(self._url, json=payload)
+        except httpx.HTTPError as exc:
+            raise SMSDeliveryError(f"Termii unreachable: {type(exc).__name__}") from exc
+        if response.status_code != 200:
+            raise SMSDeliveryError(f"Termii returned HTTP {response.status_code}")
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise SMSDeliveryError("Termii returned a non-JSON response") from exc
+        message_id = data.get("message_id_str") or data.get("message_id")
+        if data.get("code") != "ok" or not message_id:
+            raise SMSDeliveryError(f"Termii rejected the message: {data.get('message', 'unknown')}")
+        logger.info("SMS to %s accepted by Termii", mask_phone(to))
+        return SentMessage(
+            to=to, body=body, provider_ref=str(message_id), sent_at=datetime.now(UTC)
+        )
+
+
 _mock_client = MockSMSClient()
 
 
 def get_sms_client() -> SMSClient:
     """FastAPI dependency. Tests override it with a fresh MockSMSClient."""
-    if get_settings().USE_MOCK_INTEGRATIONS:
+    settings = get_settings()
+    if settings.sms_provider == "mock":
         return _mock_client
-    raise ServiceUnavailableError(
-        "SMS delivery is not configured. Set USE_MOCK_INTEGRATIONS=true until a provider is added.",
-        code="sms_not_configured",
-    )
+    try:
+        return TermiiSMSClient(settings)
+    except SMSDeliveryError as exc:
+        raise ServiceUnavailableError(
+            "SMS delivery is not configured. Set SMS_PROVIDER_API_KEY and SMS_PROVIDER_BASE_URL, "
+            "or USE_MOCK_INTEGRATIONS=true for local development.",
+            code="sms_not_configured",
+        ) from exc

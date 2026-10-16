@@ -1,0 +1,46 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Packaging / build artifacts
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+wheels/
+
+# Lockfile (regenerated locally by `uv sync`)
+uv.lock
+
+# Testing / type checking / linting
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Local databases
+*.db
+*.sqlite3
+
+# Logs
+*.log
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/

@@ -22,6 +22,8 @@ dependencies = [
     "celery>=5.4",
     "redis>=5.0",
     "reportlab>=4.2",
+    "boto3>=1.35",  # S3 uploads (core/storage.py)
+    "python-multipart>=0.0.9",  # form and file uploads (caregiver certifications)
 ]
 
 [project.optional-dependencies]

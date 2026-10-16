@@ -11,17 +11,14 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, date, datetime
 from enum import StrEnum
-from functools import lru_cache
 from typing import Any
 
-from cryptography.fernet import Fernet, InvalidToken
 from geoalchemy2 import Geography
 from sqlalchemy import (
     Boolean,
     Date,
     Enum,
     ForeignKey,
-    LargeBinary,
     SmallInteger,
     String,
     UniqueConstraint,
@@ -29,11 +26,9 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.types import TypeDecorator
 
-from app.config import get_settings
+from app.core.encryption import EncryptedText
 from app.database import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 
 # Age of majority in Nigeria. Below this a patient needs a guardian (ON-3).
@@ -50,42 +45,6 @@ class AlertChannel(StrEnum):
 
 def _enum_values(enum_cls: type[StrEnum]) -> list[str]:
     return [member.value for member in enum_cls]
-
-
-# ---------------------------------------------------------------- encryption
-# TODO: move to app/core/encryption.py once that module is built, and import it here.
-@lru_cache
-def _fernet() -> Fernet:
-    key = get_settings().FIELD_ENCRYPTION_KEY
-    if key is None:
-        raise RuntimeError(
-            "FIELD_ENCRYPTION_KEY is not set, so health data can't be encrypted. Generate one: "
-            'python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
-        )
-    return Fernet(key.get_secret_value().encode())
-
-
-class EncryptedText(TypeDecorator[str]):
-    """Text encrypted with Fernet before it reaches Postgres (stored as `bytea`)."""
-
-    impl = LargeBinary
-    cache_ok = True
-
-    def process_bind_param(self, value: str | None, dialect: Dialect) -> bytes | None:
-        if value is None:
-            return None
-        return _fernet().encrypt(value.encode())
-
-    def process_result_value(self, value: Any, dialect: Dialect) -> str | None:
-        if value is None:
-            return None
-        try:
-            return _fernet().decrypt(bytes(value)).decode()
-        except InvalidToken as exc:
-            raise RuntimeError(
-                "Could not decrypt a health field: FIELD_ENCRYPTION_KEY doesn't match the key "
-                "the data was written with"
-            ) from exc
 
 
 # ---------------------------------------------------------------- models
@@ -176,9 +135,9 @@ class CareProfile(UUIDPrimaryKeyMixin, Base):
     )
     allergies: Mapped[str | None] = mapped_column(EncryptedText)
     care_instructions: Mapped[str | None] = mapped_column(EncryptedText)
-    # No FK yet: the facilities table doesn't exist. The facilities migration should add
-    # fk_care_profiles_primary_facility_id_facilities (ON DELETE SET NULL).
-    primary_facility_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
+    primary_facility_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("facilities.id", ondelete="SET NULL"), index=True
+    )
     updated_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
