@@ -1,11 +1,13 @@
 # Bookings domain: work log and handoff
 
 **Last updated:** 2026-10-16
-**Branch:** `feature/patients-domain` (**not committed yet**)
-**Path worked on (the only folder changed):** `backend/app/domains/bookings/`
+**Branch:** `feature-bookings` → **PR #7** into `development` (https://github.com/Burger-karl/CareKin/pull/7)
+**Path worked on:** `backend/app/domains/bookings/`, plus **one approved file outside it:**
+`backend/alembic/versions/20261016_0008_bookings.py` (the migration; see 1.1).
 
-Everything outside this folder was read for context only and not modified, as instructed.
-`git status` shows changes only in this folder.
+Everything else outside the bookings folder was read for context only and not modified, as
+instructed. `development` was merged into the branch (a merge commit, no conflicts) so the
+migration could chain after `development`'s 0007 caregivers migration.
 
 **Sources, in priority order:**
 1. **PRD** (CareKin PRD Draft v0.1, 7 Oct 2026). This is the authority. Requirement IDs (BK-3,
@@ -26,11 +28,48 @@ Anything not required by the PRD is marked **"beyond the PRD"** with the reason.
 | Lint (`ruff check`, `ruff format --check`) | ✅ Passes |
 | Existing test suite | ✅ 103/103 pass (real PostGIS + Redis in Docker) |
 | Bookings tests: PRD/ERD conformance + scenarios + R1–R7 | ✅ **56/56 pass** (see 2.7), but the test files are **not in the repo** (outside my folder) |
-| Change scope | ✅ Verified with `git status`: only `backend/app/domains/bookings/` changed |
-| **CI pipeline** | ❌ **Will fail** until a migration exists (see 3.1 step 1). **Reproduced:** `alembic upgrade head` creates 0 of the 6 bookings tables, and `alembic check` fails with "New upgrade operations detected". |
-| Usable in a real environment | ❌ Needs the migration and the caregivers table (3.1, steps 1 and 3) |
+| Change scope | ✅ Bookings folder + the one approved migration file (see 1.1) |
+| **CI migration check** | ✅ **Fixed** (see 1.1). Locally: `upgrade head` → `alembic check` "No new upgrade operations detected" → `downgrade base` → upgrade again, all clean. |
+| Caregivers | ✅ Uses `development`'s real `Caregiver` model with a real FK `bookings.caregiver_id → caregivers.id`. The 503 `caregivers_unavailable` path is gone. |
+| Usable in a real environment | ✅ Once PR #7 merges and the migration runs. Payments (step 5) is still needed to take bookings past `accepted`. |
 | Housekeeping on a schedule | ⚠️ Code done; needs Celery beat (no Celery app in the project yet). Ops can run it by hand. |
 | Payments / escrow | ❌ Separate domain, not started |
+
+### 1.1 Round 4: fixing the failing CI check on PR #7
+
+**What failed:** the PR's `backend` CI job, at `alembic check`. CI ran `development`'s migrations
+0001–0007 and then found the 6 bookings tables in the models with no migration ("Detected added
+table 'bookings'" …). This was the known gap B1, not a code bug. The security check passed.
+
+**Decision:** the fix needs a file outside the bookings folder, so I asked first. The user
+approved adding **only the migration file**.
+
+**What I did:**
+1. Merged `origin/development` into `feature-bookings` (clean; `development` never touched bookings).
+2. Inside bookings:
+   - `models.py`: `caregiver_id` now has FK `caregivers.id` ON DELETE RESTRICT (ERD 2.5).
+     `EncryptedText` is now imported from `app.core.encryption`, where `development` moved it.
+   - `service.py`: replaced my stand-in `_caregivers` table with `development`'s real `Caregiver`
+     model; removed `CaregiversUnavailable` (503), which can no longer happen.
+3. Added `backend/alembic/versions/20261016_0008_bookings.py` (revision `0008`, revises `0007`),
+   generated with `alembic revision --autogenerate`, then hand-fixed like the team's other migrations:
+   - `care_notes.body` as `sa.LargeBinary()`. Autogenerate wrote `app.core.encryption.EncryptedText()`
+     without an import, which would have crashed `alembic upgrade`. Same type as the patients migration.
+   - The downgrade drops the 6 enum types, so a downgrade-then-upgrade works (same pattern as 0007).
+   - A descriptive title; formatted with ruff.
+
+**Verified locally (PostGIS 16), running exactly CI's steps:** `upgrade head` (6/6 tables, caregiver
+FK present) → `alembic check`: *No new upgrade operations detected* → `downgrade base` (0 bookings
+enums left) → `upgrade head` again → `check` again: clean.
+
+**Tests on the updated branch (`development` + bookings + migration):**
+- Full project suite: **309/309 passed**, including `development`'s caregivers, facilities,
+  crisis and passport tests.
+- Bookings tests against the real `caregivers` table and the new FK: **55 passed, 1 skipped**.
+  The skipped test is "caregivers table missing → 503", which can no longer happen.
+
+Note: `ruff format --check alembic/versions/` reports two **existing** migrations (0002, 0006)
+as unformatted on `development`. I didn't touch them.
 
 ---
 
@@ -163,7 +202,7 @@ session scratchpad, not the repo: `test_prd_erd.py` (40 tests), `test_bookings_f
 | Conventions: time and money | Timestamps are `timestamptz`; money is `bigint` minor units; API returns integers; price rounds up to a whole kobo, never a float | ✅ |
 | Conventions: `encrypted_text` | `care_notes.body` is `bytea` and unreadable in raw SQL | ✅ |
 | 5 enums | All 6 enums have the ERD's exact values and order (+ `shift_status.cancelled`, documented) | ✅ |
-| 6 foreign keys | All 12 FKs point at the right table with the right delete rule (RESTRICT, or SET NULL for `booked_by` and `author_id`). `caregiver_id` has no FK yet (documented, B2). | ✅ |
+| 6 foreign keys | All 13 FKs point at the right table with the right delete rule (RESTRICT, or SET NULL for `booked_by` and `author_id`), including `caregiver_id → caregivers` since round 4 | ✅ |
 | 6 lookup indexes | Every FK column is indexed; `(caregiver_id, starts_at)` exists; GIST on `service_location` | ✅ |
 | 6 checks | `starts_at < ends_at`, `rating 1–5`, `scheduled_start < scheduled_end`, money ≥ 0. Postgres itself rejects violations. | ✅ |
 | 6 uniques | `reviews (shift_id, reviewer_id)` and `check_ins (shift_id, kind)` (documented deviations) | ✅ |
@@ -200,9 +239,9 @@ scheduling (no Celery app). Housekeeping was tested by calling it with a simulat
 
 | Step | What | Where | Why / PRD |
 | --- | --- | --- | --- |
-| **1** | **Write the bookings migration.** CI fails at `alembic check` (`.github/workflows/ci.yml` line 50) until this exists. Run `alembic revision --autogenerate -m "bookings tables"` and check it includes: the 6 tables; enums `booking_type`, `booking_status`, `approval_decision`, `shift_status` (**with `cancelled`**), `checkin_kind`, `review_direction`; `bookings.accepted_at`; unique `check_ins (shift_id, kind)`; unique `reviews (shift_id, reviewer_id)`; the GIST index on `bookings.service_location`; and a downgrade that drops it all. | `backend/alembic/versions/` | Nothing works outside tests without it |
+| ~~1~~ | ✅ **DONE in round 4 (1.1): `20261016_0008_bookings.py`.** Original note: CI fails at `alembic check` (`.github/workflows/ci.yml` line 50) until this exists. Run `alembic revision --autogenerate -m "bookings tables"` and check it includes: the 6 tables; enums `booking_type`, `booking_status`, `approval_decision`, `shift_status` (**with `cancelled`**), `checkin_kind`, `review_direction`; `bookings.accepted_at`; unique `check_ins (shift_id, kind)`; unique `reviews (shift_id, reviewer_id)`; the GIST index on `bookings.service_location`; and a downgrade that drops it all. | `backend/alembic/versions/` | Nothing works outside tests without it |
 | **2** | **Move the tests into the repo.** `test_bookings.py` is a one-line stub. The 16 throwaway tests can be dropped in (ask for them). Add unit tests for `price_minor`, `split_into_shifts`, `covers_night`, `distance_m`. | `backend/app/tests/test_bookings.py` | **9.2 / 11:** "automated tests for every money-moving code path" |
-| **3** | **Build the caregivers model.** Until then, creating a booking and every caregiver action return **503 `caregivers_unavailable`**. Needs `id`, `user_id` (unique), `status` (`approved` = bookable), `hourly_rate_minor`. Then replace the `_caregivers = table(...)` block in `service.py` with the real model, and add FK `fk_bookings_caregiver_id_caregivers` (ON DELETE RESTRICT) in its migration. | `backend/app/domains/caregivers/` | **ON-4, TS-1** |
+| ~~3~~ | ✅ **DONE: `development` built the caregivers model; bookings now uses it with a real FK (1.1).** Original note: Until then, creating a booking and every caregiver action return **503 `caregivers_unavailable`**. Needs `id`, `user_id` (unique), `status` (`approved` = bookable), `hourly_rate_minor`. Then replace the `_caregivers = table(...)` block in `service.py` with the real model, and add FK `fk_bookings_caregiver_id_caregivers` (ON DELETE RESTRICT) in its migration. | `backend/app/domains/caregivers/` | **ON-4, TS-1** |
 | **4** | **Schedule housekeeping.** Create the Celery app (PRD 10.1: Celery + Redis) and add a beat entry running `app.domains.bookings.jobs.run_housekeeping` every 5–15 min, with its own DB session and `Notifier(get_sms_client())`. Until then, ops calls `POST /bookings/ops/housekeeping`. | new `app/core/celery.py` (or similar) | R1, R2; **10.1** background jobs |
 | **5** | **Payments domain**: Payment, EscrowTransaction, LedgerEntry, WebhookEvent. Call `bookings.service.mark_paid()` on success (caller commits). **Release escrow only for `completed` shifts.** **Refund** missed shifts and no-shows (booking `cancelled` after `paid`, audit `booking.no_show`). A family-abroad user with `family_links.can_fund` pays (Stripe, BK-5). Commission goes to the ledger (`platform_revenue`). If `mark_paid()` raises `booking_invalid_status` because the booking expired first, refund the payment. | `backend/app/domains/payments/` (new) | **BK-2, BK-5, BK-6**, section 12 |
 | **6** | **Trust domain:** on an incident with `is_dispute`, call `bookings.service.mark_disputed()`. Consider turning flagged check-ins (R7) and no-shows (R1) into incidents. | `backend/app/domains/trust/` | **TS-2, TS-5, OP-2** |
@@ -215,13 +254,12 @@ scheduling (no Celery app). Housekeeping was tested by calling it with a simulat
 
 | Not done | Reason | PRD |
 | --- | --- | --- |
-| Migration | `backend/alembic/` is outside my folder | — |
 | Tests in the repo | `backend/app/tests/` is outside my folder | 9.2 |
 | Celery schedule for housekeeping | No Celery app exists, and it would live outside my folder | 10.1 |
 | **Family-abroad notifications** | The PRD says family "receives updates and alerts", but it must respect the patient's `share_scope` (ON-5), and what they may receive isn't defined. Notices go to the patient, booker and guardians only. | Section 4, ON-5 |
 | **WhatsApp and push** | Only SMS exists (`app/integrations/whatsapp.py` is a stub). The PRD says WhatsApp is the main channel. Swap the client inside `notifications.Notifier` when the notifications module (10.2 #4) exists. Texts are sent inside the request today; move them to a Celery queue. | 10.1, 10.2 |
 | Escrow, payments, ledger, refunds | Separate payments domain (ERD and PRD 10.1) | BK-2, BK-5, BK-6 |
-| Caregiver availability windows checked at booking | Caregivers domain doesn't exist; only booking clashes are checked | ON-4, 8 (matching) |
+| Caregiver availability windows checked at booking | Not yet; only booking clashes are checked. `development` now has `availability_windows`, so `create_booking` could check them next. | ON-4, 8 (matching) |
 | Caregiver `avg_rating` update after reviews | Columns live in the caregivers domain | BK-4 |
 | Ops actions (force cancel, refund, resolve) | Ops can read, see flagged check-ins and run housekeeping; actions belong with payments and the ops console | OP-2 |
 | Ops approval for minors | TS-3 says guardian (see D2) | TS-3, 8 |
@@ -236,9 +274,9 @@ scheduling (no Celery app). Housekeeping was tested by calling it with a simulat
 - **Auto-closed shifts** (`completed`, `actual_end` NULL) count as worked. Payments or ops should
   decide whether to pay a shift with no check-out.
 - Booking lists return no total count (add one if the apps need paging UI).
-- Bookings imports helpers from patients (`EncryptedText`, `GeoPoint`, and the private `_to_wkt`
-  and `_from_wkb`). Move them to `app/core/encryption.py` and a new `app/core/geo.py`. Each
-  import has a `TODO`.
+- Bookings still imports `GeoPoint` and the private `_to_wkt`/`_from_wkb` from patients. Move
+  them to a new `app/core/geo.py` (each import has a `TODO`). `EncryptedText` is already done:
+  it's imported from `app.core.encryption`.
 - SMS is sent inside the request, so a slow SMS provider slows the request (it never fails it).
 
 ---

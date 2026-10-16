@@ -27,10 +27,6 @@ scheduled -> cancelled when the booking is cancelled, declined or expires.
 Every write adds an audit_logs row in the same transaction. Care-note reads are
 audited too, since notes can hold health data (HP-4). SMS notices (notifications.py)
 go out after the commit and never fail the request.
-
-The caregivers table isn't modelled yet, so caregivers are read through a minimal
-table definition (`_caregivers`) matching ERD section 2.3. Until that table exists,
-calls that need a caregiver fail with 503 caregivers_unavailable.
 """
 
 from __future__ import annotations
@@ -44,7 +40,7 @@ from datetime import UTC, datetime, time, timedelta, timezone
 from typing import Any, Literal
 
 from fastapi import Request
-from sqlalchemy import BigInteger, ColumnElement, String, Uuid, cast, column, func, select, table
+from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,7 +50,6 @@ from app.core.exceptions import (
     ConflictError,
     ForbiddenError,
     NotFoundError,
-    ServiceUnavailableError,
 )
 from app.core.permissions import UserRole
 from app.domains.auth.models import User
@@ -82,6 +77,7 @@ from app.domains.bookings.schemas import (
     GuardianApprovalCreate,
     ReviewCreate,
 )
+from app.domains.caregivers.models import Caregiver, CaregiverStatus
 from app.domains.patients.models import FamilyLink, Guardian, Patient
 from app.domains.patients.schemas import GeoPoint
 
@@ -158,12 +154,6 @@ class CaregiverNotFound(NotFoundError):
     code = "caregiver_not_found"
 
 
-class CaregiversUnavailable(ServiceUnavailableError):
-    """The caregivers table doesn't exist yet."""
-
-    code = "caregivers_unavailable"
-
-
 # ---------------------------------------------------------------- actor
 @dataclass(frozen=True)
 class Actor:
@@ -209,51 +199,16 @@ async def _commit(db: AsyncSession) -> None:
 
 
 # ---------------------------------------------------------------- caregivers
-# Read-only view of the columns bookings needs (ERD 2.3). Replace with the
-# Caregiver model once app/domains/caregivers/models.py defines it.
-_caregivers = table(
-    "caregivers",
-    column("id", Uuid()),
-    column("user_id", Uuid()),
-    column("status", String()),
-    column("hourly_rate_minor", BigInteger()),
-)
-CAREGIVER_BOOKABLE_STATUS = "approved"  # TS-1: only approved caregivers are bookable
+# TS-1: only caregivers a human ops user approved are bookable.
+CAREGIVER_BOOKABLE_STATUS = CaregiverStatus.APPROVED
 
 
-@dataclass(frozen=True)
-class CaregiverInfo:
-    id: uuid.UUID
-    user_id: uuid.UUID
-    status: str
-    hourly_rate_minor: int | None
+async def _caregiver_by_id(db: AsyncSession, caregiver_id: uuid.UUID) -> Caregiver | None:
+    return await db.get(Caregiver, caregiver_id)
 
 
-async def _find_caregiver(db: AsyncSession, where: ColumnElement[bool]) -> CaregiverInfo | None:
-    query = select(
-        _caregivers.c.id,
-        _caregivers.c.user_id,
-        cast(_caregivers.c.status, String),  # a Postgres enum; compare as text
-        _caregivers.c.hourly_rate_minor,
-    ).where(where)
-    try:
-        row = (await db.execute(query)).first()
-    except DBAPIError as exc:
-        if _sqlstate(exc) != "42P01":  # undefined_table
-            raise
-        await db.rollback()
-        raise CaregiversUnavailable(
-            "Caregiver records aren't available yet, so this can't be done."
-        ) from exc
-    return CaregiverInfo(*row) if row else None
-
-
-async def _caregiver_by_id(db: AsyncSession, caregiver_id: uuid.UUID) -> CaregiverInfo | None:
-    return await _find_caregiver(db, _caregivers.c.id == caregiver_id)
-
-
-async def _caregiver_by_user(db: AsyncSession, user_id: uuid.UUID) -> CaregiverInfo | None:
-    return await _find_caregiver(db, _caregivers.c.user_id == user_id)
+async def _caregiver_by_user(db: AsyncSession, user_id: uuid.UUID) -> Caregiver | None:
+    return await db.scalar(select(Caregiver).where(Caregiver.user_id == user_id))
 
 
 async def _lock_caregiver(db: AsyncSession, caregiver_id: uuid.UUID) -> None:

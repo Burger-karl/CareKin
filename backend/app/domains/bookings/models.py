@@ -33,10 +33,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.encryption import EncryptedText
 from app.database import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
-
-# TODO: import from app/core/encryption.py once EncryptedText moves there.
-from app.domains.patients.models import EncryptedText
 
 
 class BookingType(StrEnum):
@@ -106,9 +104,10 @@ class Booking(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     patient_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("patients.id", ondelete="RESTRICT"), index=True
     )
-    # No FK yet: the caregivers table doesn't exist. The caregivers migration should add
-    # fk_bookings_caregiver_id_caregivers (ON DELETE RESTRICT).
-    caregiver_id: Mapped[uuid.UUID]
+    # Indexed by ix_bookings_caregiver_id_starts_at (caregiver_id leads).
+    caregiver_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("caregivers.id", ondelete="RESTRICT")
+    )
     # Patient or guardian who booked.
     booked_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
