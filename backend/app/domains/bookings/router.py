@@ -18,6 +18,8 @@ from app.database import DbSession
 from app.domains.auth.dependencies import CurrentUser
 from app.domains.bookings import jobs, service
 from app.domains.bookings.models import BookingStatus
+from app.domains.bookings import booking_level
+from app.domains.bookings.booking_level import BookingCheckIn, BookingReview
 from app.domains.bookings.notifications import Notifier
 from app.domains.bookings.schemas import (
     BookingCreate,
@@ -223,3 +225,36 @@ async def create_review(
 ):
     """Two-way rating after each shift (BK-4)."""
     return await service.create_review(db, actor, booking_id, shift_id, data)
+# ---------------------------------------------------------------- booking-level routes (Day 12)
+@router.post(
+    "/{booking_id}/checkin",
+    response_model=CheckInRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def booking_check_in(
+    booking_id: uuid.UUID, data: BookingCheckIn, db: DbSession, actor: Actor, notifier: Notices
+):
+    """GPS check-in for the shift that is starting (BK-3). Resending returns the original."""
+    return await booking_level.check_in(db, actor, booking_id, data, notifier)
+
+
+@router.post(
+    "/{booking_id}/checkout",
+    response_model=CheckInRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def booking_check_out(
+    booking_id: uuid.UUID, data: BookingCheckIn, db: DbSession, actor: Actor, notifier: Notices
+):
+    """GPS check-out for the shift in progress (BK-3)."""
+    return await booking_level.check_out(db, actor, booking_id, data, notifier)
+
+
+@router.post(
+    "/{booking_id}/review",
+    response_model=ReviewRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def booking_review(booking_id: uuid.UUID, data: BookingReview, db: DbSession, actor: Actor):
+    """Two-way rating after a shift (BK-4): the family rates the caregiver and vice versa."""
+    return await booking_level.review(db, actor, booking_id, data)
