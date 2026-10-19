@@ -792,6 +792,59 @@ async def mark_disputed(
     return booking
 
 
+async def end_dispute(
+    db: AsyncSession, booking_id: uuid.UUID, restore_to: BookingStatus, actor: Actor | None = None
+) -> Booking:
+    """Trust domain: the last open dispute closed, so the booking goes back to where it was."""
+    booking = await db.get(Booking, booking_id, with_for_update=True)
+    if booking is None:
+        raise BookingNotFound("Booking not found")
+    _require_status(booking, BookingStatus.DISPUTED)
+    if restore_to not in (BookingStatus.PAID, BookingStatus.IN_PROGRESS, BookingStatus.COMPLETED):
+        raise InvalidBookingStatus(f"A dispute can't end in {restore_to.value}")
+    booking.status = restore_to
+    _audit(db, actor, "booking.dispute_end", "booking", booking.id, {"status": restore_to.value})
+    return booking
+
+
+async def mark_refunded(
+    db: AsyncSession, booking_id: uuid.UUID, actor: Actor | None = None
+) -> Booking:
+    """Payments domain: escrow went back to the payer. Care that hasn't happened won't now.
+
+    A completed booking keeps its status (the care happened; ops refunded anyway). Any
+    other booking still open for care is cancelled, with its open shifts.
+    """
+    booking = await db.get(Booking, booking_id, with_for_update=True)
+    if booking is None:
+        raise BookingNotFound("Booking not found")
+    if booking.status in (
+        BookingStatus.ACCEPTED,
+        BookingStatus.PAID,
+        BookingStatus.IN_PROGRESS,
+        BookingStatus.DISPUTED,
+    ):
+        previous = booking.status
+        booking.status = BookingStatus.CANCELLED
+        await cancel_open_shifts(db, booking.id)
+        # A shift running when ops refunds is stopped too; its check-in stays on record.
+        for shift in await db.scalars(
+            select(Shift).where(
+                Shift.booking_id == booking.id, Shift.status == ShiftStatus.IN_PROGRESS
+            )
+        ):
+            shift.status = ShiftStatus.CANCELLED
+        _audit(
+            db,
+            actor,
+            "booking.cancel",
+            "booking",
+            booking.id,
+            {"previous_status": previous.value, "reason": "refunded"},
+        )
+    return booking
+
+
 async def assigned_caregiver_ids(
     db: AsyncSession, patient_id: uuid.UUID, at: datetime | None = None
 ) -> list[uuid.UUID]:

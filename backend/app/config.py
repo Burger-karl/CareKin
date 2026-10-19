@@ -127,6 +127,15 @@ class Settings(BaseSettings):
     PAYSTACK_BASE_URL: str = "https://api.paystack.co"
     STRIPE_SECRET_KEY: SecretStr | None = None
     STRIPE_WEBHOOK_SECRET: SecretStr | None = None
+    # Where Paystack and Stripe send the payer after checkout. Set by us, never by the
+    # client, so a checkout link can't be used as an open redirect. "?booking=<id>" is added.
+    PAYMENT_RETURN_URL: str = "http://localhost:3000/payments/return"
+    # Paystack needs an email for every payment; users without one get
+    # "<user id>@<this domain>". Use a domain CareKin controls before going live.
+    PAYMENT_EMAIL_DOMAIN: str = "users.carekin.invalid"
+    # CareKin's commission on a released booking, in basis points (100 = 1%). Zero until
+    # pricing is set from pilot data (PRD section 12).
+    PLATFORM_COMMISSION_BPS: int = Field(default=0, ge=0, le=5000)
     # SMS carries OTPs and crisis alerts. Unset follows USE_MOCK_INTEGRATIONS (mock when
     # true, termii when false). Production refuses "mock": a mocked crisis alert reaches nobody.
     SMS_PROVIDER: Literal["mock", "termii"] | None = None

@@ -5,7 +5,8 @@ Run a worker and the scheduler (from backend/):
     celery -A app.worker beat --loglevel=info
 
 Crisis alerts are first sent from the API process itself, so they don't depend on
-this worker. Beat runs crisis.sweep_alerts every 30 seconds to retry failures.
+this worker. Beat runs crisis.sweep_alerts every 30 seconds to retry failures, and
+payments.settle_escrows every 10 minutes (reconcile payments, release and refund escrow).
 """
 
 from celery import Celery
@@ -18,7 +19,7 @@ celery_app = Celery(
     "carekin",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["app.domains.crisis.tasks"],
+    include=["app.domains.crisis.tasks", "app.domains.payments.tasks"],
 )
 celery_app.conf.update(
     timezone="UTC",
@@ -35,6 +36,11 @@ celery_app.conf.update(
             "task": "crisis.sweep_alerts",
             "schedule": 30.0,
             "options": {"expires": 25},  # never let sweeps pile up
+        },
+        "payments-settle-escrows": {
+            "task": "payments.settle_escrows",
+            "schedule": 600.0,  # every 10 minutes
+            "options": {"expires": 540},
         },
     },
 )
