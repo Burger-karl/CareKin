@@ -54,6 +54,7 @@ from app.core.exceptions import (
 from app.core.permissions import UserRole
 from app.domains.auth.models import User
 from app.domains.bookings import notifications as notices
+from app.domains.bookings import ratings
 from app.domains.bookings.models import (
     ApprovalDecision,
     Booking,
@@ -1109,6 +1110,8 @@ async def create_review(
             "rating": data.rating,
         },
     )
+    if direction is ReviewDirection.FAMILY_TO_CAREGIVER:
+        await ratings.refresh_caregiver_rating(db, booking.caregiver_id)
     await _commit(db)
     await db.refresh(review)
     return review
