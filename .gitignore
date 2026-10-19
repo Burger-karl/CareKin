@@ -30,3 +30,6 @@ dist/
 .DS_Store
 .vscode/
 .idea/
+
+# Personal build log (Day 11). Kept locally, never pushed.
+backend/Log.md

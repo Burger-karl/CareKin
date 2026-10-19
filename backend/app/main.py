@@ -19,6 +19,7 @@ from app.domains.facilities.router import router as facilities_router
 from app.domains.ops.router import router as ops_router
 from app.domains.passport.router import router as passport_router
 from app.domains.patients.router import router as patients_router
+from app.domains.payments.router import router as payments_router
 from app.domains.trust.router import router as trust_router
 
 
@@ -54,6 +55,7 @@ app.include_router(patients_router, prefix=settings.API_V1_PREFIX)
 app.include_router(caregivers_router, prefix=settings.API_V1_PREFIX)
 app.include_router(facilities_router, prefix=settings.API_V1_PREFIX)
 app.include_router(bookings_router, prefix=settings.API_V1_PREFIX)
+app.include_router(payments_router, prefix=settings.API_V1_PREFIX)
 app.include_router(crisis_router, prefix=settings.API_V1_PREFIX)
 app.include_router(passport_router, prefix=settings.API_V1_PREFIX)
 app.include_router(trust_router, prefix=settings.API_V1_PREFIX)

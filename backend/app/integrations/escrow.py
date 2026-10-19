@@ -4,7 +4,7 @@ The partner is open decision Topic 3. Until it is chosen, only the mock exists.
 
 Lifecycle (one escrow per booking, Day 11). Statuses are the ERD's `escrow_status`:
 
-    pending --payment lands--> held --release--> released
+    pending --fund (payment lands)--> held --release--> released
        |                         |--refund--> refunded
        |                         \\--open_dispute--> on_hold_dispute
        \\--refund (never paid)--> refunded
@@ -72,6 +72,13 @@ class EscrowClient(Protocol):
 
     async def get(self, escrow_ref: str) -> EscrowRecord: ...
 
+    async def fund(self, escrow_ref: str, *, payment_ref: str) -> EscrowRecord:
+        """Tell the partner the payer's money for this escrow has landed: pending -> held.
+
+        `payment_ref` is our payment reference, so the partner can match the transfer.
+        """
+        ...
+
     async def release(self, escrow_ref: str) -> EscrowRecord:
         """Pay the caregiver. Only from `held`."""
         ...
@@ -114,6 +121,12 @@ class MockEscrowClient:
 
     def __init__(self) -> None:
         self._records: dict[str, EscrowRecord] = {}
+        # Test hook: while True every call fails as a partner outage would.
+        self.unavailable = False
+
+    def _check_up(self) -> None:
+        if self.unavailable:
+            raise IntegrationError(self.provider, "partner unavailable (simulated)")
 
     async def create(
         self,
@@ -125,6 +138,7 @@ class MockEscrowClient:
         payee_ref: str,
         description: str,
     ) -> EscrowRecord:
+        self._check_up()
         if amount_minor <= 0:
             raise EscrowStateError(self.provider, "amount must be positive")
         escrow_ref = f"mock-escrow-{reference}"
@@ -145,12 +159,14 @@ class MockEscrowClient:
         return record
 
     async def get(self, escrow_ref: str) -> EscrowRecord:
+        self._check_up()
         try:
             return self._records[escrow_ref]
         except KeyError:
             raise IntegrationError(self.provider, "unknown escrow", retryable=False) from None
 
     def _move(self, escrow_ref: str, action: str) -> EscrowRecord:
+        self._check_up()
         record = self._records.get(escrow_ref)
         if record is None:
             raise IntegrationError(self.provider, "unknown escrow", retryable=False)
@@ -164,6 +180,9 @@ class MockEscrowClient:
         record = replace(record, status=target, updated_at=datetime.now(UTC))
         self._records[escrow_ref] = record
         return record
+
+    async def fund(self, escrow_ref: str, *, payment_ref: str) -> EscrowRecord:
+        return self._move(escrow_ref, "fund")
 
     def simulate_funding(self, escrow_ref: str) -> EscrowRecord:
         """Development/test hook: what the partner does when the payment lands."""
