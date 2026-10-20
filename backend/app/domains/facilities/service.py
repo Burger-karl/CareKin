@@ -66,6 +66,7 @@ def build_facility_read(
         longitude=longitude,
         verification_status=facility.verification_status,
         location_verified=facility.location_verified,
+        last_verified_at=facility.last_verified_at,
         created_at=facility.created_at,
         updated_at=facility.updated_at,
     )
