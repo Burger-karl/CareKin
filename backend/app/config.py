@@ -153,7 +153,14 @@ class Settings(BaseSettings):
     WHATSAPP_API_VERSION: str = "v21.0"
     # Timeout for every partner HTTP call except SMS (which has its own).
     INTEGRATION_TIMEOUT_SECONDS: float = Field(default=15.0, gt=0)
-    LLM_API_KEY: SecretStr | None = None
+
+    # --------------------------------------------------------------- local LLM
+    # Ollama runs in docker-compose; inside Docker the URL is overridden to
+    # http://ollama:11434. Health data never leaves our own servers.
+    OLLAMA_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "llama3.2:3b"
+    # Small models on CPU are slow; agents fall back to a no-LLM reply after this.
+    OLLAMA_TIMEOUT_SECONDS: float = Field(default=60.0, gt=0)
 
     # --------------------------------------------------------------- crisis
     EMERGENCY_NUMBER: str = "112"  # shown in every crisis response (PRD CR-3)

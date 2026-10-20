@@ -33,3 +33,5 @@ dist/
 
 # Personal build log (Day 11). Kept locally, never pushed.
 backend/Log.md
+log.md
+docs/CareKin_Daily_Endpoint_Plan.docx
