@@ -50,7 +50,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.core.audit import write_audit
+from app.core.audit import AuditLog, write_audit
 from app.core.exceptions import (
     BadRequestError,
     CareKinError,
@@ -845,16 +845,19 @@ async def _record_webhook_error(db: AsyncSession, event_pk: uuid.UUID, message: 
 
 
 # ---------------------------------------------------------------- release and refund
-async def _rule_release_ready(db: AsyncSession, booking: Booking, now: datetime) -> bool:
-    """The settlement rule only releases a clean booking; anything else waits for a human.
+# Why the settlement rule cannot release a completed booking. Operations reads these in the
+# incident opened for it. The open-incident reason is special: someone is already looking.
+BLOCKER_OPEN_INCIDENT = "an incident is open on this booking"
+RELEASE_QUEUED = "escrow.release_queued"
 
-    Clean: every shift completed with a check-in and a check-out, all inside the
-    geofence, no open incident on the booking, and RELEASE_HOLD_PERIOD has passed since
-    the last check-out reached the server (server clock, so a device can't backdate it).
+
+async def release_blockers(db: AsyncSession, booking: Booking) -> list[str]:
+    """Reasons the rule won't release this booking, apart from the waiting period.
+
+    An empty list means the booking is clean: every shift completed with a check-in and a
+    check-out, all inside the geofence, and no open incident on the booking.
     """
     shifts = list(await db.scalars(select(Shift).where(Shift.booking_id == booking.id)))
-    if not shifts or any(s.status is not ShiftStatus.COMPLETED for s in shifts):
-        return False
     check_ins = list(
         await db.scalars(
             select(CheckIn)
@@ -863,23 +866,87 @@ async def _rule_release_ready(db: AsyncSession, booking: Booking, now: datetime)
         )
     )
     kinds = {(c.shift_id, c.kind) for c in check_ins}
-    for shift in shifts:
-        if (shift.id, CheckInKind.CHECK_IN) not in kinds or (
-            shift.id,
-            CheckInKind.CHECK_OUT,
-        ) not in kinds:
-            return False
+    blockers: list[str] = []
+    if not shifts or any(s.status is not ShiftStatus.COMPLETED for s in shifts):
+        blockers.append("not every shift was completed")
+    if any(
+        (s.id, CheckInKind.CHECK_IN) not in kinds or (s.id, CheckInKind.CHECK_OUT) not in kinds
+        for s in shifts
+    ):
+        blockers.append("a shift is missing its check-in or check-out")
     if any(not c.within_geofence for c in check_ins):
-        return False
+        blockers.append("a check-in or check-out was outside the service location")
     open_incident = await db.scalar(
         select(
             exists().where(Incident.booking_id == booking.id, Incident.status.in_(OPEN_STATUSES))
         )
     )
     if open_incident:
+        blockers.append(BLOCKER_OPEN_INCIDENT)
+    return blockers
+
+
+async def _rule_release_ready(db: AsyncSession, booking: Booking, now: datetime) -> bool:
+    """The settlement rule only releases a clean booking; anything else waits for a human.
+
+    Clean: no blockers (see release_blockers), and RELEASE_HOLD_PERIOD has passed since the
+    last check-out reached the server (server clock, so a device can't backdate it).
+    """
+    if await release_blockers(db, booking):
         return False
-    last_out = max(c.received_at for c in check_ins if c.kind is CheckInKind.CHECK_OUT)
-    return last_out <= now - RELEASE_HOLD_PERIOD
+    last_out = await db.scalar(
+        select(func.max(CheckIn.received_at))
+        .join(Shift, Shift.id == CheckIn.shift_id)
+        .where(Shift.booking_id == booking.id, CheckIn.kind == CheckInKind.CHECK_OUT)
+    )
+    return last_out is not None and last_out <= now - RELEASE_HOLD_PERIOD
+
+
+async def queue_release_for_ops(db: AsyncSession, booking_id: uuid.UUID) -> bool:
+    """Ask operations to decide a release the rule can't make. True if it opened an incident.
+
+    Opens one incident per booking, ever: the audit log remembers that it was queued, so a
+    resolved incident is not reopened every sweep. Skipped while an incident is already
+    open (someone is looking), and when nothing but the waiting period is in the way.
+    Operations then releases or refunds by hand.
+    """
+    booking = await lock_booking(db, booking_id)
+    escrow = await _escrow_for(db, booking.id, lock=True)
+    if (
+        escrow is None
+        or escrow.status is not EscrowStatus.HELD
+        or booking.status is not BookingStatus.COMPLETED
+    ):
+        await db.rollback()
+        return False
+    blockers = await release_blockers(db, booking)
+    already_queued = await db.scalar(
+        select(exists().where(AuditLog.action == RELEASE_QUEUED, AuditLog.entity_id == escrow.id))
+    )
+    if not blockers or BLOCKER_OPEN_INCIDENT in blockers or already_queued:
+        await db.rollback()
+        return False
+    open_system_incident(
+        db,
+        booking_id=booking.id,
+        category=IncidentCategory.PAYMENT,
+        severity=Severity.MEDIUM,
+        description=(
+            "Release needs a decision: "
+            + "; ".join(blockers)
+            + ". The payment stays held until operations releases or refunds it."
+        ),
+    )
+    _audit(
+        db,
+        None,
+        RELEASE_QUEUED,
+        "escrow",
+        escrow.id,
+        {"booking_id": str(booking.id), "blockers": blockers},
+    )
+    await commit(db)
+    return True
 
 
 async def release_escrow(
@@ -1193,6 +1260,7 @@ class SettlementResult:
     payments_reconciled: int = 0
     payments_abandoned: int = 0
     partner_synced: int = 0
+    queued_for_ops: int = 0
     errors: int = 0
     _funded: list[uuid.UUID] = field(default_factory=list, repr=False)
 
@@ -1204,6 +1272,7 @@ class SettlementResult:
             "payments_reconciled": self.payments_reconciled,
             "payments_abandoned": self.payments_abandoned,
             "partner_synced": self.partner_synced,
+            "queued_for_ops": self.queued_for_ops,
             "errors": self.errors,
         }
 
@@ -1223,7 +1292,8 @@ async def settle_escrows(
        captured payments the partner couldn't take.
     2. Sync the partner with escrows whose state changed while it was unreachable.
     3. Refund escrows of cancelled bookings (a no-show); close unfunded ones.
-    4. Release clean, completed bookings RELEASE_HOLD_PERIOD after the last check-out.
+    4. Release clean, completed bookings RELEASE_HOLD_PERIOD after the last check-out;
+       open an incident for the ones the rule can't release, so operations decides.
 
     Each item is its own transaction: one failure is counted and retried next run.
     """
@@ -1370,15 +1440,23 @@ async def settle_escrows(
     for booking_id in completed:
 
         async def release(booking_id: uuid.UUID = booking_id) -> None:
-            await release_escrow(
-                db,
-                None,
-                booking_id,
-                escrow_client=escrow_client,
-                method=SettlementMethod.RULE,
-                notifier=notifier,
-                now=now,
-            )
+            try:
+                await release_escrow(
+                    db,
+                    None,
+                    booking_id,
+                    escrow_client=escrow_client,
+                    method=SettlementMethod.RULE,
+                    notifier=notifier,
+                    now=now,
+                )
+            except EscrowConflict as conflict:
+                if conflict.code != "release_not_ready":
+                    raise  # attempt() treats the other conflicts as "nothing to do"
+                await db.rollback()
+                if await queue_release_for_ops(db, booking_id):
+                    out.queued_for_ops += 1
+                return
             out.released += 1
 
         await attempt("release", booking_id, release)
