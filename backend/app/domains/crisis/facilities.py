@@ -93,6 +93,7 @@ async def _within(
             func.ST_X(point),
             distance,
             func.array_agg(aggregate_order_by(service_type, service_type)),
+            Facility.last_verified_at,
         )
         .join(FacilityService, FacilityService.facility_id == Facility.id)
         .where(
@@ -107,7 +108,7 @@ async def _within(
         .limit(get_settings().CRISIS_FACILITY_LIMIT)
     )
     results = []
-    for facility_id, name, address, phone, lat, lng, distance_m, services in (
+    for facility_id, name, address, phone, lat, lng, distance_m, services, verified_at in (
         await db.execute(stmt)
     ).all():
         phone = phone or None  # the seed leaves unconfirmed numbers empty
@@ -125,7 +126,7 @@ async def _within(
                 "emergency_phone": None,  # not in the facilities model yet
                 "crisis_services": list(services),
                 "verification_status": VerificationStatus.VERIFIED.value,
-                "last_verified_at": None,  # not in the facilities model yet
+                "last_verified_at": verified_at,  # stamped by ops verification (OP-3)
                 "directions_url": (
                     f"https://www.google.com/maps/dir/?api=1&destination={lat:.6f},{lng:.6f}"
                 ),

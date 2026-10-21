@@ -169,6 +169,11 @@ class Settings(BaseSettings):
     # Queued or failed alerts idle this long are picked up by the retry sweep.
     CRISIS_ALERT_RETRY_AFTER_SECONDS: int = Field(default=30, ge=5)
 
+    # ---------------------------------------------------------- ops console
+    # A verified facility whose last check is older than this goes back into the ops
+    # verification queue as "stale" (OP-3; facility re-verification, FF-5).
+    FACILITY_REVERIFY_AFTER_DAYS: int = Field(default=90, ge=1)
+
     # -------------------------------------------------------------- storage
     S3_BUCKET: str | None = None
     AWS_REGION: str = "af-south-1"
