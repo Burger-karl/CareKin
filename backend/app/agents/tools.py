@@ -90,8 +90,13 @@ class AgentTool:
     # Shortens the route's JSON for the model's context; the full result is kept for
     # the API response. Small models read slowly (~14 tokens/s here).
     for_model: Callable[[Any], Any] = field(default=lambda result: result)
+    # The JSON Schema shown to the model. Defaults to `args`' schema; give a flat one
+    # by hand when `args` uses enums or other $refs, which small models handle poorly.
+    parameters: dict[str, Any] | None = None
 
     def spec(self) -> ToolSpec:
+        if self.parameters is not None:
+            return ToolSpec(self.name, self.description, self.parameters)
         schema = self.args.model_json_schema()
         return ToolSpec(
             name=self.name,

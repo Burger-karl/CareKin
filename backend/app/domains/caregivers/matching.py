@@ -166,12 +166,12 @@ def score(
 
 # ---------------------------------------------------------------- access
 @dataclass(frozen=True)
-class _Context:
+class MatchContext:
     patient: Patient
     guardian_approval_required: bool
 
 
-async def _context(db: AsyncSession, user: User, patient_id: uuid.UUID) -> _Context:
+async def match_context(db: AsyncSession, user: User, patient_id: uuid.UUID) -> MatchContext:
     """Who may match for this patient, and whether a booking would wait for a guardian."""
     if user.role == UserRole.OPS:
         patient = await db.get(Patient, patient_id)
@@ -193,7 +193,7 @@ async def _context(db: AsyncSession, user: User, patient_id: uuid.UUID) -> _Cont
         self_approved = guardian is not None and guardian.can_approve_caregivers
     # Same rule as bookings: no login of their own, or a minor (ON-3, TS-3).
     needs_guardian = patient.user_id is None or patient.is_minor
-    return _Context(patient, needs_guardian and not self_approved)
+    return MatchContext(patient, needs_guardian and not self_approved)
 
 
 def _required_tier(patient: Patient, requested: CaregiverTier | None) -> CaregiverTier | None:
@@ -207,7 +207,7 @@ async def match_caregivers(
 ) -> s.MatchOut:
     if data.starts_at <= datetime.now(LAGOS):
         raise BadRequestError("The time slot must start in the future", code="slot_in_past")
-    context = await _context(db, user, data.patient_id)
+    context = await match_context(db, user, data.patient_id)
     patient = context.patient
 
     location: GeoPoint | None = data.service_location or _from_wkb(patient.home_location)
