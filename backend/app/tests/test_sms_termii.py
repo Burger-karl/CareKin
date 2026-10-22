@@ -134,6 +134,8 @@ def deployed(environment: str, **overrides) -> Settings:
         "FIELD_ENCRYPTION_KEY": Fernet.generate_key().decode(),
         "DEBUG": False,
         "CORS_ORIGINS": ["https://app.carekin.ng"],
+        # Tests run with LLM_PROVIDER=mock, which production refuses.
+        "LLM_PROVIDER": "ollama",
         **overrides,
     }
     return Settings(**values)

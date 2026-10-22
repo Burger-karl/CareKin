@@ -16,6 +16,7 @@ import os
 # Must run before anything imports app.config.
 os.environ["ENVIRONMENT"] = "test"
 os.environ["USE_MOCK_INTEGRATIONS"] = "true"
+os.environ["LLM_PROVIDER"] = "mock"  # tests never call a real model
 os.environ["DATABASE_URL"] = os.environ.get(
     "TEST_DATABASE_URL", "postgresql+asyncpg://carekin:carekin@localhost:5432/carekin_test"
 )

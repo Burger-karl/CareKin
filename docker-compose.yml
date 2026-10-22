@@ -26,9 +26,40 @@ services:
       timeout: 5s
       retries: 10
 
+  # Local LLM for the AI agents (Days 14-15). Models are stored in the
+  # ollama_data volume, so they're downloaded once, not on every start.
+  ollama:
+    image: ollama/ollama:0.40.2
+    ports:
+      # 127.0.0.1: reachable from this machine only; the API has no auth.
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # One-shot: pulls OLLAMA_MODEL into the volume, then exits. A no-op once the
+  # model is there. The first pull downloads about 2 GB.
+  ollama-pull:
+    image: ollama/ollama:0.40.2
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull", "${OLLAMA_MODEL:-llama3.2:3b}"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
   backend:
     build: ./backend
     env_file: .env
+    environment:
+      # Services reach each other by name inside Docker; .env keeps localhost.
+      OLLAMA_URL: http://ollama:11434
     # Apply migrations, then start the API with reload for local development.
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     ports:
@@ -38,6 +69,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      # Started, not healthy or pulled: the API works without the LLM (agents
+      # fall back to replies built without it).
+      ollama:
+        condition: service_started
     volumes:
       - ./backend:/code
 
@@ -47,6 +82,8 @@ services:
   worker:
     build: ./backend
     env_file: .env
+    environment:
+      OLLAMA_URL: http://ollama:11434  # the companion's WhatsApp replies run here
     command: celery -A app.worker worker --loglevel=info
     depends_on:
       db:
@@ -68,3 +105,4 @@ services:
 
 volumes:
   pgdata:
+  ollama_data:

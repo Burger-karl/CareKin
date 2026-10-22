@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.agents.router import router as agents_router
 from app.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.health import router as health_router
@@ -62,3 +63,4 @@ app.include_router(passport_router, prefix=settings.API_V1_PREFIX)
 app.include_router(trust_router, prefix=settings.API_V1_PREFIX)
 app.include_router(ops_router, prefix=settings.API_V1_PREFIX)
 app.include_router(audit_router, prefix=settings.API_V1_PREFIX)
+app.include_router(agents_router, prefix=settings.API_V1_PREFIX)
