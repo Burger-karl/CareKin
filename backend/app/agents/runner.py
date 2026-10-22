@@ -10,11 +10,14 @@ One run, for one user message:
    itself with no model arguments. The agent always answers from real data.
 4. Ask the model, without tools, to explain that result. Only text written after the
    result counts: an answer written before it would describe data the model never saw.
-5. If the model is down, slow or out of turns, `text` is None and the agent builds its
-   reply without the model.
+5. Screen the explanation (guardrails.screen_reply). One that strays into medicine is
+   logged with its flag and withheld (`blocked`).
+6. If the model is down, slow, out of turns or blocked, `text` is None and the agent
+   builds its reply without the model.
 
 Every step is committed as it happens, so a conversation that fails halfway is still
-logged (PRD 8.1). Guardrails and human handoff run around this loop (guardrails.py).
+logged (PRD 8.1). Screening the user's message and the human handoff happen before
+this loop runs (guardrails.screen_message and hand_off).
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ from typing import Any, Literal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.guardrails import screen_reply
 from app.agents.models import AgentConversation, AgentMessage, GuardrailFlag, MessageRole
 from app.agents.tools import (
     AgentTool,
@@ -87,6 +91,7 @@ class AgentOutcome:
     called_by: Literal["model", "code"]  # code: the fallback made the call
     text: str | None  # the model's explanation; None means build the reply without it
     truncated: bool  # the explanation hit its token cap and may end mid-sentence
+    blocked: bool  # the explanation strayed into medicine and was withheld
     llm_error: str | None  # why the model wasn't used, if it wasn't
     model_calls: int
 
@@ -180,14 +185,20 @@ async def run_agent(
             text, truncated = reply.content or None, reply.truncated
         except LLMUnavailable as exc:
             llm_error = str(exc)
+    blocked = False
     if text is not None:
-        await log.add(MessageRole.ASSISTANT, text)
+        # Step 5: a reply that strays into medicine is logged with its flag, never sent.
+        flag = screen_reply(text)
+        await log.add(MessageRole.ASSISTANT, text, flag=flag)
+        if flag is not GuardrailFlag.NONE:
+            text, truncated, blocked = None, False, True
 
     return AgentOutcome(
         result=result,
         called_by=called_by,
         text=text,
         truncated=truncated,
+        blocked=blocked,
         llm_error=llm_error,
         model_calls=calls,
     )
