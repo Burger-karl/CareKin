@@ -5,8 +5,8 @@ agent conversation is logged, and a handoff links to the ops incident it opened.
 agent_messages.content is encrypted (stored as bytea). Columns beyond the ERD are
 explained in app/agents/models.py. Reminder comes with the companion (Day 15).
 
-Revision ID: 0011
-Revises: 0010
+Revision ID: 0012
+Revises: 0011
 Create Date: 2026-10-22 10:12:33.421250+00:00
 """
 
@@ -16,8 +16,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "0011"
-down_revision: str | Sequence[str] | None = "0010"
+revision: str = "0012"
+down_revision: str | Sequence[str] | None = "0011"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
