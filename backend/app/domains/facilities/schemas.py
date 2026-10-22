@@ -116,6 +116,8 @@ class FacilityRead(BaseModel):
 
     verification_status: VerificationStatus
     location_verified: bool
+    # When ops last checked the listing (FF-3). Null until it has been checked.
+    last_verified_at: datetime | None = None
 
     created_at: datetime
     updated_at: datetime

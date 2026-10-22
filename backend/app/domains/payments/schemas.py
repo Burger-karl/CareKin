@@ -127,4 +127,8 @@ class SettlementRead(BaseModel):
     payments_reconciled: int = Field(description="Waiting payments checked with the gateway.")
     payments_abandoned: int = Field(description="Payments never completed within 48 hours.")
     partner_synced: int = Field(description="Escrows whose partner state was brought in line.")
+    queued_for_ops: int = Field(
+        default=0,
+        description="Completed bookings the rule could not release, sent to operations.",
+    )
     errors: int = Field(description="Items that failed and will be retried next run.")
