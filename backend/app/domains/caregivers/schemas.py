@@ -9,6 +9,9 @@ Three views of a caregiver exist on purpose:
 - CaregiverPublicOut  everyone else: no guarantors, no NIN, no exact location,
                       no verification internals
 - VerifyOut           ops only: includes each check's stored result
+
+CaregiverMatch (from /caregivers/match) shows only public-profile fields plus how
+well the caregiver fits the request.
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ from typing import Annotated
 
 from pydantic import (
     AfterValidator,
+    AwareDatetime,
     BaseModel,
     ConfigDict,
     Field,
@@ -29,6 +33,8 @@ from pydantic import (
 )
 
 from app.core.phone import InvalidPhoneNumber, normalize_phone
+from app.domains.bookings.models import BookingType
+from app.domains.bookings.schemas import MAX_BOOKING, MIN_BOOKING
 from app.domains.caregivers.models import (
     CaregiverStatus,
     CaregiverTier,
@@ -37,10 +43,12 @@ from app.domains.caregivers.models import (
     CheckType,
     ReviewStatus,
 )
+from app.domains.patients.schemas import GeoPoint
 
 GUARANTORS_REQUIRED = 2  # TS-1: two guarantors per caregiver
 VERIFIABLE_CHECKS = (CheckType.NIN, CheckType.BACKGROUND)  # Day 6 /verify only
 MAX_AVAILABILITY_WINDOWS = 50
+MAX_MATCH_RESULTS = 50
 
 
 # ------------------------------------------------------------ validators
@@ -250,6 +258,36 @@ class VerifyRequest(StrictModel):
         return self
 
 
+class MatchRequest(StrictModel):
+    """POST /caregivers/match: rank caregivers for one patient and one time slot."""
+
+    patient_id: uuid.UUID
+    booking_type: BookingType
+    starts_at: AwareDatetime = Field(description="With a timezone, e.g. 2026-11-02T08:00:00+01:00.")
+    ends_at: AwareDatetime
+    service_location: GeoPoint | None = Field(
+        default=None, description="Where care happens. Defaults to the patient's home location."
+    )
+    languages: Languages = Field(
+        default_factory=list,
+        description="Preferred languages; caregivers speaking more rank higher.",
+    )
+    min_tier: CaregiverTier | None = Field(
+        default=None,
+        description="Lowest tier to consider. Minors always need trained_carer or above.",
+    )
+    limit: int = Field(default=10, ge=1, le=MAX_MATCH_RESULTS)
+
+    @model_validator(mode="after")
+    def _check(self) -> MatchRequest:
+        length = self.ends_at - self.starts_at
+        if length < MIN_BOOKING:
+            raise ValueError("The time slot must be at least 1 hour long and end after it starts")
+        if length > MAX_BOOKING:
+            raise ValueError("The time slot can't be longer than 31 days")
+        return self
+
+
 # ------------------------------------------------------------- responses
 class GuarantorOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -374,6 +412,42 @@ class CaregiverPublicOut(BaseModel):
 
 class AvailabilityOut(BaseModel):
     windows: list[AvailabilityWindowOut]
+
+
+class MatchFactors(BaseModel):
+    """Each factor from 0 (worst) to 1 (best). The score is their weighted sum."""
+
+    distance: float
+    rating: float
+    language: float
+    experience: float
+
+
+class CaregiverMatch(BaseModel):
+    """One ranked caregiver. Only fields the public profile already shows, plus the fit."""
+
+    caregiver_id: uuid.UUID
+    full_name: str
+    tier: CaregiverTier
+    languages: list[str]
+    years_experience: int | None
+    hourly_rate_minor: int
+    avg_rating: Decimal | None
+    rating_count: int
+    distance_km: float
+    languages_matched: list[str]
+    estimated_total_minor: int = Field(description="Hourly rate times the slot, in kobo.")
+    score: float = Field(ge=0, le=100)
+    factors: MatchFactors
+
+
+class MatchOut(BaseModel):
+    patient_id: uuid.UUID
+    guardian_approval_required: bool = Field(
+        description="A booking for this patient waits for a guardian's approval (TS-3)."
+    )
+    min_tier_applied: CaregiverTier | None
+    results: list[CaregiverMatch]
 
 
 class VerifyOut(BaseModel):

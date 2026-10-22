@@ -14,8 +14,8 @@ from app.core.permissions import UserRole, require_roles
 from app.database import DbSession
 from app.domains.auth.dependencies import CurrentUser
 from app.domains.auth.models import User
+from app.domains.caregivers import matching, service
 from app.domains.caregivers import schemas as s
-from app.domains.caregivers import service
 from app.domains.caregivers.models import CertType
 from app.integrations.background_check import (
     BackgroundCheckClient,
@@ -29,6 +29,8 @@ router = APIRouter(prefix="/caregivers", tags=["caregivers"])
 CaregiverUser = Annotated[User, require_roles(UserRole.CAREGIVER)]
 CaregiverOrOps = Annotated[User, require_roles(UserRole.CAREGIVER, UserRole.OPS)]
 OpsUser = Annotated[User, require_roles(UserRole.OPS)]
+# The patient or a guardian (whoever may book), and ops.
+Matcher = Annotated[User, require_roles(UserRole.PATIENT, UserRole.GUARDIAN, UserRole.OPS)]
 
 
 @router.post("", response_model=s.CaregiverOut, status_code=status.HTTP_201_CREATED)
@@ -37,6 +39,17 @@ async def create_caregiver(
 ) -> s.CaregiverOut:
     """Apply as a caregiver with a tier and exactly two guarantors (ON-4)."""
     return await service.create_caregiver(db, user, data, request)
+
+
+@router.post("/match", response_model=s.MatchOut)
+async def match_caregivers(
+    data: s.MatchRequest, user: Matcher, db: DbSession, request: Request
+) -> s.MatchOut:
+    """Rank bookable caregivers for a patient and time slot, with the reasons for each score.
+
+    Deterministic (no AI). The matching agent calls this as its tool (PRD section 8).
+    """
+    return await matching.match_caregivers(db, user, data, request)
 
 
 @router.get("/{caregiver_id}", response_model=s.CaregiverOut | s.CaregiverPublicOut)
