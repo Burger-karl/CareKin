@@ -5,7 +5,7 @@ import uuid
 
 from geoalchemy2 import Geography, Geometry
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import cast, func, select
+from sqlalchemy import ColumnElement, cast, func, literal, null, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,8 @@ from app.domains.facilities.models import (
 )
 from app.domains.facilities.schemas import (
     FacilityCreate,
+    FacilityFilters,
+    FacilityListItem,
     FacilityRead,
     FacilitySearchParams,
     FacilitySearchResult,
@@ -25,6 +27,7 @@ from app.domains.facilities.schemas import (
     FacilityServiceRead,
     FacilityServiceUpdate,
     FacilityUpdate,
+    FinderService,
 )
 
 
@@ -62,6 +65,7 @@ def build_facility_read(
         name=facility.name,
         address=facility.address,
         phone_number=facility.phone_number,
+        accepted_hmos=list(facility.accepted_hmos or []),
         latitude=latitude,
         longitude=longitude,
         verification_status=facility.verification_status,
@@ -144,6 +148,7 @@ async def create_facility(
         name=data.name,
         address=data.address,
         phone_number=data.phone_number,
+        accepted_hmos=data.accepted_hmos,
         location=location,
         verification_status=VerificationStatus.PENDING,
         location_verified=False,
@@ -554,3 +559,189 @@ async def find_nearby_facilities(
         )
 
     return results
+
+
+# ==========================================================
+# FACILITY FINDER (FF-1, FF-2): GET /facilities
+# ==========================================================
+
+# Service types are free text (normalize_service_type lowercases them), so each filter
+# accepts the names facilities actually use. Compared with "_" and "-" read as spaces,
+# so "blood_bank", "blood-bank" and "blood bank" all count. When adding a service, the
+# first name in each tuple is the one to use.
+FINDER_SERVICE_NAMES: dict[FinderService, tuple[str, ...]] = {
+    FinderService.HAEMATOLOGIST: (
+        "haematologist",
+        "haematology",
+        "hematologist",
+        "hematology",
+    ),
+    FinderService.EMERGENCY_24H: (
+        "emergency 24h",
+        "24h emergency",
+        "24 hour emergency",
+        "24 hours emergency",
+        "emergency 24 hours",
+        "24/7 emergency",
+    ),
+    FinderService.TRANSFUSION: (
+        "transfusion",
+        "blood transfusion",
+    ),
+    FinderService.BLOOD_BANK: (
+        "blood bank",
+    ),
+    FinderService.GENOTYPE_TESTING: (
+        "genotype testing",
+        "genotype test",
+        "genotyping",
+        "hb electrophoresis",
+        "haemoglobin electrophoresis",
+        "hemoglobin electrophoresis",
+    ),
+}
+
+
+def _service_label(column: ColumnElement[str]) -> ColumnElement[str]:
+    return func.replace(func.replace(column, "_", " "), "-", " ")
+
+
+def _usable_service() -> tuple[ColumnElement[bool], ...]:
+    """A service a family can rely on today: verified by ops and available now."""
+
+    return (
+        FacilityService.verification_status == VerificationStatus.VERIFIED,
+        FacilityService.availability == ServiceAvailability.AVAILABLE,
+    )
+
+
+def _offers(kind: FinderService) -> ColumnElement[bool]:
+    return (
+        select(FacilityService.id)
+        .where(
+            FacilityService.facility_id == Facility.id,
+            *_usable_service(),
+            _service_label(FacilityService.service_type).in_(FINDER_SERVICE_NAMES[kind]),
+        )
+        .correlate(Facility)
+        .exists()
+    )
+
+
+def _accepts_hmo(name: str) -> ColumnElement[bool]:
+    hmo = func.unnest(Facility.accepted_hmos).table_valued("name").render_derived()
+    key = " ".join(name.split()).lower()
+    return (
+        select(literal(1))
+        .select_from(hmo)
+        .where(func.lower(hmo.c.name) == key)
+        .correlate(Facility)
+        .exists()
+    )
+
+
+def _like(text_value: str) -> str:
+    """An ILIKE pattern that matches the text literally (% and _ are not wildcards)."""
+
+    escaped = (
+        text_value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    )
+    return f"%{escaped}%"
+
+
+async def search_facilities(
+    db: AsyncSession,
+    filters: FacilityFilters,
+) -> tuple[list[FacilityListItem], int]:
+    """Public facility finder. Returns one page and the total number of matches.
+
+    Only facilities ops verified are listed. A search near a point also needs a verified
+    location, since the distance would otherwise mislead. Every filter must match.
+    """
+
+    conditions: list[ColumnElement[bool]] = [
+        Facility.verification_status == VerificationStatus.VERIFIED,
+    ]
+
+    for kind in dict.fromkeys(filters.service):
+        conditions.append(_offers(kind))
+
+    if filters.hmo:
+        conditions.append(_accepts_hmo(filters.hmo))
+
+    if filters.q:
+        pattern = _like(" ".join(filters.q.split()))
+        conditions.append(
+            or_(
+                Facility.name.ilike(pattern, escape="\\"),
+                Facility.address.ilike(pattern, escape="\\"),
+            )
+        )
+
+    distance: ColumnElement = null()
+    if filters.near:
+        origin = cast(
+            func.ST_SetSRID(
+                func.ST_MakePoint(filters.longitude, filters.latitude),
+                4326,
+            ),
+            Geography(geometry_type="POINT", srid=4326),
+        )
+        distance = func.ST_Distance(Facility.location, origin)
+        conditions += [
+            Facility.location.is_not(None),
+            Facility.location_verified.is_(True),
+        ]
+        if filters.radius_km is not None:
+            conditions.append(
+                func.ST_DWithin(Facility.location, origin, filters.radius_km * 1000)
+            )
+
+    total = await db.scalar(
+        select(func.count()).select_from(Facility).where(*conditions)
+    )
+
+    point = cast(Facility.location, Geometry(geometry_type="POINT", srid=4326))
+    order = (
+        (distance, func.lower(Facility.name), Facility.id)
+        if filters.near
+        else (func.lower(Facility.name), Facility.id)
+    )
+    rows = (
+        await db.execute(
+            select(
+                Facility,
+                distance.label("distance_metres"),
+                func.ST_Y(point).label("latitude"),
+                func.ST_X(point).label("longitude"),
+            )
+            .where(*conditions)
+            .order_by(*order)
+            .limit(filters.limit)
+            .offset(filters.offset)
+        )
+    ).all()
+
+    if not rows:
+        return [], int(total or 0)
+
+    facility_ids = [row[0].id for row in rows]
+    services: dict[uuid.UUID, list[FacilityServiceRead]] = {fid: [] for fid in facility_ids}
+    for facility_service in await db.scalars(
+        select(FacilityService)
+        .where(FacilityService.facility_id.in_(facility_ids), *_usable_service())
+        .order_by(FacilityService.service_type)
+    ):
+        services[facility_service.facility_id].append(
+            FacilityServiceRead.model_validate(facility_service)
+        )
+
+    items = [
+        FacilityListItem(
+            facility=build_facility_read(facility, latitude, longitude),
+            distance_km=None if metres is None else round(metres / 1000, 2),
+            services=services[facility.id],
+        )
+        for facility, metres, latitude, longitude in rows
+    ]
+    return items, int(total or 0)
