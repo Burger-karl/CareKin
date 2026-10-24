@@ -9,12 +9,15 @@ from geoalchemy2.elements import WKBElement
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Enum as SAEnum,
     ForeignKey,
     String,
+    Text,
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import (
@@ -37,8 +40,18 @@ class ServiceAvailability(str, Enum):
 
 # ---------------- FACILITY ----------------
 
+# Most HMOs a facility can list (FF-1). Keeps one listing from bloating every search row.
+MAX_ACCEPTED_HMOS = 50
+
+
 class Facility(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "facilities"
+    __table_args__ = (
+        CheckConstraint(
+            f"cardinality(accepted_hmos) <= {MAX_ACCEPTED_HMOS}",
+            name="accepted_hmos_limit",
+        ),
+    )
 
     name: Mapped[str] = mapped_column(
         String(200),
@@ -100,6 +113,15 @@ class Facility(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
+    )
+
+    # FF-1: HMOs the facility accepts, as the facility names them ("Hygeia HMO").
+    # Stored trimmed and de-duplicated ignoring case; search compares ignoring case.
+    accepted_hmos: Mapped[list[str]] = mapped_column(
+        ARRAY(Text),
+        nullable=False,
+        default=list,
+        server_default=text("'{}'::text[]"),
     )
 
     services: Mapped[list[FacilityService]] = relationship(

@@ -12,7 +12,7 @@ so no custom route class is needed.
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.core.exceptions import ForbiddenError
 from app.core.permissions import UserRole, require_roles
@@ -21,6 +21,8 @@ from app.domains.auth.models import User
 from app.domains.facilities import service
 from app.domains.facilities.schemas import (
     FacilityCreate,
+    FacilityFilters,
+    FacilityListItem,
     FacilityRead,
     FacilitySearchParams,
     FacilitySearchResult,
@@ -69,6 +71,31 @@ FacilityManager = Annotated[
     User,
     Depends(require_facility_manager),
 ]
+
+# 0. FACILITY FINDER (FF-1, FF-2)
+
+@router.get(
+    "",
+    response_model=list[FacilityListItem],
+    status_code=status.HTTP_200_OK,
+    summary="Search facilities with SCD filters",
+)
+async def search_facilities(
+    db: DbSession,
+    response: Response,
+    filters: Annotated[FacilityFilters, Query()],
+):
+    """Verified facilities, filtered by SCD service, HMO, text and distance.
+
+    Every filter given must match. With latitude and longitude the results are nearest
+    first and carry `distance_km`; otherwise they're sorted by name. The total number of
+    matches is in the `X-Total-Count` header, for paging.
+    """
+
+    items, total = await service.search_facilities(db, filters)
+    response.headers["X-Total-Count"] = str(total)
+    return items
+
 
 # 1. FIND NEARBY FACILITIES
 
