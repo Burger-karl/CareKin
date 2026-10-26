@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 180 26% 96%;
+    --foreground: 200 39% 12%;
+    --card: 0 0% 100%;
+    --primary: 173 80% 29%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 171 37% 90%;
+    --muted: 180 18% 92%;
+    --muted-foreground: 198 14% 40%;
+    --border: 173 26% 86%;
+    --crisis: 357 66% 53%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background font-sans text-body text-foreground antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background;
+  }
+
+  button,
+  [role="button"],
+  a {
+    touch-action: manipulation;
+  }
+}
+
+@layer components {
+  .ck-card {
+    @apply rounded-xl border-[1.5px] border-line bg-white;
+  }
+  .ck-label {
+    @apply text-[13px] font-semibold text-foreground;
+  }
+  .ck-meta {
+    @apply text-meta text-muted-foreground;
+  }
+  .safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
