@@ -134,6 +134,10 @@ def test_distress_wins_over_clinical() -> None:
         "You may have an infection, so choose the nurse.",
         "Ada can treat his pain at home.",
         "Ngozi can give him his tablets and stop the medicine if needed.",
+        "It's normal to feel tired when you're not feeling well.",
+        "That's completely normal after a crisis.",
+        "It is common to have some pain in the mornings.",
+        "Don't worry, it's nothing to worry about.",
     ],
 )
 def test_model_replies_about_medicine_are_withheld(reply) -> None:
@@ -146,6 +150,8 @@ def test_model_replies_about_medicine_are_withheld(reply) -> None:
         "Chi Okeke is 1.2 km away, speaks Igbo and has a 4.9 rating from 20 families.",
         "Ada is a licensed nurse with 8 years' experience; Chi is closer but newer.",
         "Two carers are free on Monday morning. Ngozi scores highest.",
+        "Glad you're feeling good today! Remember to drink some water.",
+        "Sorry you're feeling tired. Please talk to your doctor about it.",
     ],
 )
 def test_ordinary_explanations_are_sent(reply) -> None:

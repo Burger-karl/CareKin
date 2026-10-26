@@ -102,6 +102,10 @@ UNSAFE_REPLY = _rules(
     r"\b(diagnos\w*|you (may|might|probably) have|it sounds like|symptoms? of)\b",
     r"\b(treat|treatment|treating|cure|remedy|antibiotics?)\b",
     rf"\b(take|give|stop|start|increase|reduce) (the |your |his |her |some )?{_MEDICINE}",
+    # Judging a symptom: the live model told a tired patient "It's normal to feel tired".
+    r"\b(it'?s|that'?s|this is|is) (perfectly |completely |quite |very )?(normal|common"
+    r"|nothing to worry about)\b",
+    r"\b(normal|common) (to|for \w+ to) (feel|have|get|be)\b",
 )
 
 HANDOFF_INCIDENT: dict[GuardrailFlag, tuple[IncidentCategory, Severity]] = {
@@ -124,24 +128,35 @@ def screen_reply(text: str) -> GuardrailFlag:
     return GuardrailFlag.CLINICAL if UNSAFE_REPLY.search(text) else GuardrailFlag.NONE
 
 
-def handoff_reply(flag: GuardrailFlag) -> str:
-    """Fixed text sent on a handoff. Written by us; the model never words this."""
+def crisis_link_line() -> str:
+    """The quick path into the crisis flow, for channels without the app's Crisis button."""
+    return f"Open the Crisis screen: {get_settings().CRISIS_LINK_URL}"
+
+
+def handoff_reply(flag: GuardrailFlag, *, link_crisis: bool = False) -> str:
+    """Fixed text sent on a handoff. Written by us; the model never words this.
+
+    `link_crisis` adds the crisis link (WhatsApp, where there is no button on screen).
+    """
     emergency = get_settings().EMERGENCY_NUMBER
     if flag is GuardrailFlag.DISTRESS:
-        return (
+        reply = (
             "This sounds urgent. If someone is in danger or having a sickle cell crisis, "
             f"press the Crisis button in the CareKin app now, or call {emergency}. "
             "A member of the CareKin team has been alerted and will contact you."
         )
-    return (
-        "I can't give medical advice, including about medicines, doses or symptoms. "
-        "Please ask a doctor, nurse or pharmacist. A member of the CareKin team will "
-        f"follow up with you. If it's an emergency, press the Crisis button or call {emergency}."
-    )
+    else:
+        reply = (
+            "I can't give medical advice, including about medicines, doses or symptoms. "
+            "Please ask a doctor, nurse or pharmacist. A member of the CareKin team will "
+            f"follow up with you. If it's an emergency, press the Crisis button or call "
+            f"{emergency}."
+        )
+    return f"{reply}\n\n{crisis_link_line()}" if link_crisis else reply
 
 
 async def hand_off(
-    db: AsyncSession, log: ConversationLog, flag: GuardrailFlag
+    db: AsyncSession, log: ConversationLog, flag: GuardrailFlag, *, link_crisis: bool = False
 ) -> tuple[str, Incident]:
     """Stop the agent and pass the conversation to a human. Returns the reply to send.
 
@@ -177,7 +192,7 @@ async def hand_off(
         entity_id=conversation.id,
         metadata={"flag": flag.value, "incident_id": str(incident.id)},
     )
-    reply = handoff_reply(flag)
+    reply = handoff_reply(flag, link_crisis=link_crisis)
     await log.add(MessageRole.SYSTEM, reply, flag=flag)  # commits all of the above
     return reply, incident
 
