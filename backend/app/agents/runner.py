@@ -15,6 +15,13 @@ One run, for one user message:
 6. If the model is down, slow, out of turns or blocked, `text` is None and the agent
    builds its reply without the model.
 
+With `required=None` (the companion) the tools are optional: the model may call some,
+then its text answer is the reply. Steps 3 and 4 don't apply: an answer written
+without any tool call is used, and one written after tool results already saw them.
+With `answer_after_tools=False` the run stops once a tool call succeeds and the caller
+words the reply from the results: the model never describes what it did, so it can't
+claim something it didn't do.
+
 Every step is committed as it happens, so a conversation that fails halfway is still
 logged (PRD 8.1). Screening the user's message and the human handoff happen before
 this loop runs (guardrails.screen_message and hand_off).
@@ -22,6 +29,7 @@ this loop runs (guardrails.screen_message and hand_off).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -45,21 +53,19 @@ EXPLANATION_TOKENS = 200
 
 
 class ConversationLog:
-    """Appends messages to a conversation in order, committing each one."""
+    """Appends messages to a conversation in order, committing each one.
 
-    def __init__(self, db: AsyncSession, conversation: AgentConversation, next_position: int):
+    Each message takes the next position under a lock on the conversation row, so two
+    WhatsApp messages handled at once can both write to one conversation.
+    """
+
+    def __init__(self, db: AsyncSession, conversation: AgentConversation):
         self.db = db
         self.conversation = conversation
-        self._next = next_position
 
     @classmethod
     async def open(cls, db: AsyncSession, conversation: AgentConversation) -> ConversationLog:
-        last = await db.scalar(
-            select(func.max(AgentMessage.position)).where(
-                AgentMessage.conversation_id == conversation.id
-            )
-        )
-        return cls(db, conversation, 0 if last is None else last + 1)
+        return cls(db, conversation)
 
     async def add(
         self,
@@ -70,30 +76,48 @@ class ConversationLog:
         flag: GuardrailFlag = GuardrailFlag.NONE,
         wa_message_id: str | None = None,
     ) -> AgentMessage:
+        conversation_id = self.conversation.id
+        await self.db.execute(
+            select(AgentConversation.id)
+            .where(AgentConversation.id == conversation_id)
+            .with_for_update()
+        )
+        last = await self.db.scalar(
+            select(func.max(AgentMessage.position)).where(
+                AgentMessage.conversation_id == conversation_id
+            )
+        )
         message = AgentMessage(
-            conversation_id=self.conversation.id,
-            position=self._next,
+            conversation_id=conversation_id,
+            position=0 if last is None else last + 1,
             role=role,
             content=content,
             tool_name=tool_name,
             guardrail_flag=flag,
             wa_message_id=wa_message_id,
         )
-        self._next += 1
         self.db.add(message)
-        await self.db.commit()
+        await self.db.commit()  # also releases the lock
         return message
 
 
 @dataclass(frozen=True)
 class AgentOutcome:
-    result: Any  # the required tool's full result (the route's JSON)
+    result: Any  # the required tool's full result (the route's JSON); None without one
     called_by: Literal["model", "code"]  # code: the fallback made the call
     text: str | None  # the model's explanation; None means build the reply without it
     truncated: bool  # the explanation hit its token cap and may end mid-sentence
     blocked: bool  # the explanation strayed into medicine and was withheld
     llm_error: str | None  # why the model wasn't used, if it wasn't
     model_calls: int
+    # Every tool call that succeeded, in order: (tool name, full result).
+    tool_results: tuple[tuple[str, Any], ...] = ()
+
+
+def complete_sentences(text: str) -> str | None:
+    """Drop a sentence cut off by the token cap; None if nothing complete is left."""
+    end = max(text.rfind(mark) for mark in ".!?")
+    return text[: end + 1].strip() if end > 0 else None
 
 
 async def run_agent(
@@ -104,25 +128,35 @@ async def run_agent(
     system: str,
     user_text: str,
     tools: list[AgentTool],
-    required: str,
+    required: str | None,
     fixed: dict[str, dict[str, Any]],
     max_turns: int = MAX_TURNS,
+    history: Sequence[ChatMessage] = (),
+    user_logged: bool = False,
+    answer_after_tools: bool = True,
 ) -> AgentOutcome:
     """Run one user message through the model and tools. See the module docstring.
 
     `fixed` holds, per tool name, the arguments only our code sets; they override
     anything the model sends. ToolRequestFailed propagates: our own route refused the
     request the code built (e.g. no access to this patient), which no retry can fix.
+    `history` is earlier turns, shown to the model between the system prompt and
+    `user_text`. `user_logged` means the caller already logged `user_text`.
+    `answer_after_tools=False` (only with `required=None`): stop at the first successful
+    tool call; `text` is then None.
     """
     by_name = {tool.name: tool for tool in tools}
     specs = [tool.spec() for tool in tools]
-    messages = [ChatMessage("system", system), ChatMessage("user", user_text)]
-    await log.add(MessageRole.USER, user_text)
+    messages = [ChatMessage("system", system), *history, ChatMessage("user", user_text)]
+    if not user_logged:
+        await log.add(MessageRole.USER, user_text)
 
     result: Any = None
     called_by: Literal["model", "code"] = "model"
     llm_error: str | None = None
     calls = 0
+    tool_results: list[tuple[str, Any]] = []
+    answer: tuple[str, bool] | None = None  # optional tools: the model's text and truncation
 
     async def run_call(call: ToolCall) -> Any:
         """Run one model tool call. Returns the result, or None after an error the model can fix."""
@@ -157,17 +191,24 @@ async def run_agent(
             break
         calls += 1
         if not reply.tool_calls:
-            break  # it answered without data; that text isn't used
+            if required is None:
+                answer = (reply.content, reply.truncated)
+            break  # with a required tool, it answered without data; that text isn't used
         messages.append(ChatMessage("assistant", reply.content, tool_calls=reply.tool_calls))
         for call in reply.tool_calls[:MAX_CALLS_PER_TURN]:
             output = await run_call(call)
-            if output is not None and call.name == required:
-                result = output
+            if output is not None:
+                tool_results.append((call.name, output))
+                if call.name == required:
+                    result = output
+        if required is None and not answer_after_tools and tool_results:
+            break
 
-    if result is None:
+    if required is not None and result is None:
         tool = by_name[required]
         args = tool.validate({})  # the tool's model arguments must all be optional
         result = await _run_and_log(log, caller, tool, args, fixed.get(required, {}), "code")
+        tool_results.append((required, result))
         called_by = "code"
         # Show the model the call, so it explains real data.
         messages.append(ChatMessage("assistant", "", tool_calls=(ToolCall(required, {}),)))
@@ -178,7 +219,10 @@ async def run_agent(
     # Step 4: the explanation, written from the result.
     text: str | None = None
     truncated = False
-    if llm_error is None and calls < max_turns:
+    if required is None:
+        if answer is not None:
+            text, truncated = answer[0] or None, answer[1]
+    elif llm_error is None and calls < max_turns:
         try:
             reply = await llm.chat(messages, max_tokens=EXPLANATION_TOKENS)
             calls += 1
@@ -201,6 +245,7 @@ async def run_agent(
         blocked=blocked,
         llm_error=llm_error,
         model_calls=calls,
+        tool_results=tuple(tool_results),
     )
 
 

@@ -178,6 +178,17 @@ class Settings(BaseSettings):
     CRISIS_ALERT_MAX_ATTEMPTS: int = Field(default=3, ge=1)
     # Queued or failed alerts idle this long are picked up by the retry sweep.
     CRISIS_ALERT_RETRY_AFTER_SECONDS: int = Field(default=30, ge=5)
+    # Sent in WhatsApp replies as the quick path into the crisis flow. Use an https link
+    # (WhatsApp only makes those tappable); the mobile app claims it as a universal link
+    # and opens its Crisis screen, other phones get the web page.
+    CRISIS_LINK_URL: str = "http://localhost:3000/crisis"
+
+    # ------------------------------------------------------ care companion
+    # A reminder Beat could not send on time (worker down) is skipped once it is this
+    # late: a water reminder at 9:00 is no use at 15:00.
+    REMINDER_GRACE_MINUTES: int = Field(default=60, ge=1)
+    # A WhatsApp conversation idle this long is closed; the next message starts a new one.
+    COMPANION_SESSION_IDLE_HOURS: int = Field(default=24, ge=1)
 
     # ---------------------------------------------------------- ops console
     # A verified facility whose last check is older than this goes back into the ops

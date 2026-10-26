@@ -24,9 +24,11 @@ from app.config import get_settings
 from app.core import encryption
 from app.core.exceptions import ForbiddenError, register_exception_handlers
 from app.core.permissions import UserRole
+from app.database import SessionLocal
 from app.domains.auth.dependencies import CurrentUser
 from app.domains.auth.models import User
 from app.integrations.llm import (
+    ChatMessage,
     LLMReply,
     LLMUnavailable,
     MockLLMClient,
@@ -295,3 +297,80 @@ async def test_a_second_run_continues_the_same_conversation(db, model, log, user
         )
     )
     assert positions == list(range(6))
+
+
+async def test_two_logs_on_one_conversation_never_clash(db, model, log, user) -> None:
+    """Two WhatsApp messages handled at once each hold their own log."""
+    other_session = SessionLocal()
+    try:
+        other = await ConversationLog.open(other_session, log.conversation)
+        await log.add(MessageRole.USER, "one")
+        await other.add(MessageRole.USER, "two")
+        await log.add(MessageRole.USER, "three")
+    finally:
+        await other_session.close()
+    assert [row[2] for row in await logged(db, log)] == ["one", "two", "three"]
+
+
+# ----------------------------------------------------------------- optional tools (companion)
+async def test_without_a_required_tool_a_plain_answer_is_the_reply(model, log, user) -> None:
+    model.queue(text_reply("Hello! How can I help?"))
+    outcome = await run(model, log, user, required=None)
+    assert outcome.text == "Hello! How can I help?" and outcome.tool_results == ()
+    assert outcome.result is None and outcome.model_calls == 1
+
+
+async def test_optional_tools_run_then_the_model_answers(db, model, log, user) -> None:
+    model.queue(tool_reply("find", {"languages": ["igbo"]}), text_reply("Found three."))
+    outcome = await run(model, log, user, required=None)
+    assert outcome.text == "Found three." and outcome.model_calls == 2
+    [(name, result)] = outcome.tool_results
+    assert name == "find" and result["body"]["patient_id"] == "the-real-patient"
+
+
+async def test_optional_tools_with_the_model_down_leave_text_empty(model, log, user) -> None:
+    model.queue(LLMUnavailable("ollama", "down"))
+    outcome = await run(model, log, user, required=None)
+    assert outcome.text is None and outcome.tool_results == () and outcome.llm_error
+
+
+async def test_history_sits_between_the_system_prompt_and_the_message(model, log, user) -> None:
+    model.queue(text_reply("Okay."))
+    earlier = [ChatMessage("user", "Remind me about water"), ChatMessage("assistant", "When?")]
+    await run(model, log, user, required=None, history=earlier)
+    sent = [(m.role, m.content) for m in model.requests[0]["messages"]]
+    assert sent[1:] == [
+        ("user", "Remind me about water"),
+        ("assistant", "When?"),
+        ("user", "Someone who speaks Igbo, please"),
+    ]
+
+
+async def test_a_message_the_caller_logged_is_not_logged_twice(db, model, log, user) -> None:
+    await log.add(MessageRole.USER, "Someone who speaks Igbo, please", wa_message_id="wamid.9")
+    model.queue(text_reply("Okay."))
+    await run(model, log, user, required=None, user_logged=True)
+    assert [row[0] for row in await logged(db, log)] == [MessageRole.USER, MessageRole.ASSISTANT]
+
+
+async def test_a_path_takes_its_placeholders_from_fixed_arguments(user) -> None:
+    tool = AgentTool(
+        name="get", description="Read.", args=EchoArgs, method="GET", path="/things/{thing_id}"
+    )
+    calls = []
+
+    class Recorder:
+        async def request(self, method, path, *, json_body=None):
+            calls.append((method, path, json_body))
+            return {}
+
+    await tool.run(Recorder(), EchoArgs(), {"thing_id": "abc"})
+    assert calls == [("GET", "/things/abc", None)]
+
+
+async def test_the_run_can_stop_once_a_tool_has_run(model, log, user) -> None:
+    """The companion words the reply itself, so the model can't misdescribe the action."""
+    model.queue(tool_reply("find"), text_reply("I also did something else."))
+    outcome = await run(model, log, user, required=None, answer_after_tools=False)
+    assert outcome.text is None and outcome.model_calls == 1
+    assert [name for name, _ in outcome.tool_results] == ["find"]
