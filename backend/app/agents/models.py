@@ -16,20 +16,39 @@ Not in the ERD:
   the ops incident it opened, which carries the human response clock (TS-2).
 - The channel enum is named `agent_channel` instead of the ERD's bare `channel`.
 - `started_at` is `created_at` from TimestampMixin.
-- `Reminder` (ERD 2.10) arrives with the WhatsApp companion (Day 15).
+
+`Reminder` (Day 15) differs from the ERD:
+- The ERD's `schedule` (a cron string) is `local_time` plus `days_of_week`, or
+  `on_date` for a one-off such as an appointment. Apps and the companion's model can
+  fill these in; nobody has to write cron.
+- The ERD's `message_template` is not stored: the text is fixed per `kind` in
+  reminders.py (approved wording, no advice), so no free text reaches a user.
+- `created_by` is also the recipient: a reminder goes to the person who set it.
+- `next_due_at` and `last_sent_at` let Beat find due reminders with one indexed query.
 """
 
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime, time
 from enum import StrEnum
 
-from sqlalchemy import Enum, ForeignKey, SmallInteger, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Enum,
+    ForeignKey,
+    SmallInteger,
+    String,
+    UniqueConstraint,
+    text,
+)
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.encryption import EncryptedText
 from app.database import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
+from app.domains.patients.models import AlertChannel
 
 
 class AgentKind(StrEnum):
@@ -127,3 +146,48 @@ class AgentMessage(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     wa_message_id: Mapped[str | None] = mapped_column(String(128), unique=True)
 
     conversation: Mapped[AgentConversation] = relationship(back_populates="messages", lazy="raise")
+
+
+class ReminderKind(StrEnum):
+    HYDRATION = "hydration"
+    MEDICATION = "medication"  # "time for your medicine": never a name or a dose
+    APPOINTMENT = "appointment"
+    CHECK_IN = "check_in"  # the companion's daily "how are you today?"
+
+
+class Reminder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """A reminder the companion sends (PRD section 8). Times are Lagos local time."""
+
+    __tablename__ = "reminders"
+    __table_args__ = (
+        # Recurring on some days of the week, or once on a date.
+        CheckConstraint(
+            "on_date IS NOT NULL OR cardinality(days_of_week) BETWEEN 1 AND 7",
+            name="schedule",
+        ),
+    )
+
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("patients.id", ondelete="RESTRICT"), index=True
+    )
+    kind: Mapped[ReminderKind] = mapped_column(_pg_enum(ReminderKind, "reminder_kind"))
+    local_time: Mapped[time]
+    # 0 = Monday ... 6 = Sunday (Python's weekday()). Empty for a one-off.
+    days_of_week: Mapped[list[int]] = mapped_column(
+        ARRAY(SmallInteger), default=list, server_default=text("'{}'::smallint[]")
+    )
+    on_date: Mapped[date | None]
+    # Reuses the alert_channel enum type created with emergency_contacts.
+    channel: Mapped[AlertChannel] = mapped_column(
+        _pg_enum(AlertChannel, "alert_channel"),
+        default=AlertChannel.WHATSAPP,
+        server_default=AlertChannel.WHATSAPP.value,
+    )
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    # Who set it, and who receives it.
+    created_by: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), index=True
+    )
+    # When it fires next, in UTC. Null once inactive or a one-off has fired.
+    next_due_at: Mapped[datetime | None] = mapped_column(index=True)
+    last_sent_at: Mapped[datetime | None]
