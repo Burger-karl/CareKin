@@ -44,3 +44,6 @@ htmlcov/
 .DS_Store
 .vscode/
 .idea/
+
+# Local helper scripts (never commit)
+create_user.py
