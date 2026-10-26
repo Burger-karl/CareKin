@@ -13,6 +13,9 @@ A tool has two kinds of arguments:
   the request). Merged in last, so the model can never change them. A small model
   also gets these wrong: llama3.2:3b sent "9am" as a timestamp.
 
+A path like "/patients/{patient_id}/reminders" takes its placeholders from `fixed`, so
+the model never picks whose data a tool touches; those keys stay out of the body.
+
 A route answering 4xx or 5xx raises ToolRequestFailed with the route's own status and
 error code: the request the code built was refused, which the model can't fix.
 """
@@ -20,6 +23,7 @@ error code: the request the code built was refused, which the model can't fix.
 from __future__ import annotations
 
 import json
+import string
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -122,8 +126,15 @@ class AgentTool:
             raise ToolArgumentsInvalid(problems) from exc
 
     async def run(self, caller: ApiCaller, args: BaseModel, fixed: dict[str, Any]) -> Any:
-        body = {**args.model_dump(mode="json", exclude_none=True), **fixed}
-        return await caller.request(self.method, self.path, json_body=body)
+        in_path = {name for _, name, _, _ in string.Formatter().parse(self.path) if name}
+        path = self.path.format(**{name: fixed[name] for name in in_path})
+        body = {
+            **args.model_dump(mode="json", exclude_none=True),
+            **{key: value for key, value in fixed.items() if key not in in_path},
+        }
+        if self.method == "GET":
+            return await caller.request(self.method, path)
+        return await caller.request(self.method, path, json_body=body)
 
 
 class ToolArgumentsInvalid(ValueError):

@@ -36,7 +36,7 @@ from app.agents.models import (
     GuardrailFlag,
     MessageRole,
 )
-from app.agents.runner import ConversationLog, run_agent
+from app.agents.runner import ConversationLog, complete_sentences, run_agent
 from app.agents.tools import AgentTool, ApiCaller
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.domains.auth.models import User
@@ -175,12 +175,6 @@ def fallback_reply(out: MatchOut) -> str:
     return reply
 
 
-def _complete_sentences(text: str) -> str | None:
-    """Drop a sentence cut off by the token cap; None if nothing complete is left."""
-    end = max(text.rfind(mark) for mark in ".!?")
-    return text[: end + 1].strip() if end > 0 else None
-
-
 # ---------------------------------------------------------------- the request
 async def _conversation(
     db: AsyncSession, user: User, data: s.AgentMatchRequest
@@ -269,7 +263,7 @@ async def run_match(
     # 5. The reply.
     text = outcome.text
     if text is not None and outcome.truncated:
-        text = _complete_sentences(text)
+        text = complete_sentences(text)
     if text is not None:
         source = "model"
     else:
