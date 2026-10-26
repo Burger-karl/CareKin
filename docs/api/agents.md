@@ -27,6 +27,8 @@ timeout to **at least 2 minutes**. Don't retry automatically: each retry is anot
 If `status` is `handed_off`, **don't show results**: show `reply` (our fixed message) and
 the Crisis button prominently. That conversation is closed to the agent; a person from the
 CareKin team follows up. To search again, start a new conversation (no `session_id`).
+Ops read a handed-off conversation with `GET /agents/companion/history/{session_id}`
+(see [companion.md](companion.md)); it works for matching conversations too.
 
 ## Who can use it
 
