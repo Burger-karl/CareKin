@@ -202,6 +202,13 @@ async def get_caregiver(
     return await _public_view(db, caregiver)
 
 
+async def get_my_caregiver(db: AsyncSession, user: User) -> s.CaregiverOut:
+    caregiver_id = await db.scalar(select(Caregiver.id).where(Caregiver.user_id == user.id))
+    if caregiver_id is None:
+        raise NotFoundError("You haven't applied as a caregiver yet.", code="caregiver_not_found")
+    return await _owner_view(db, await _load(db, caregiver_id))
+
+
 async def update_caregiver(
     db: AsyncSession,
     user: User,

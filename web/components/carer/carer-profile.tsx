@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Check, Clock, LogOut } from "lucide-react";
+import { AvailabilityCard } from "@/components/carer/availability-card";
 import { useSession } from "@/components/session/session";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,8 @@ export function CarerProfile() {
           </Button>
         </Card>
       )}
+
+      {id && <AvailabilityCard caregiverId={id} />}
 
       {caregiver && "verification_checks" in caregiver && (
         <Card>

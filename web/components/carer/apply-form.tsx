@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Check, LocateFixed } from "lucide-react";
@@ -28,6 +29,7 @@ const TIERS: { id: CaregiverTier; label: string; sub: string }[] = [
 
 export function ApplyForm() {
   const router = useRouter();
+  const qc = useQueryClient();
   const [tier, setTier] = useState<CaregiverTier>("companion");
   const [bio, setBio] = useState("");
   const [languages, setLanguages] = useState("English");
@@ -89,10 +91,12 @@ export function ApplyForm() {
         },
       });
       writeJson(CAREGIVER_KEY, c.id);
+      await qc.invalidateQueries({ queryKey: ["caregiver-self"] });
       toast.success("Application sent. We'll check your details and be in touch.");
       router.replace("/carer");
     } catch (err) {
       if (err instanceof ApiError && err.code === "caregiver_exists") {
+        await qc.invalidateQueries({ queryKey: ["caregiver-self"] });
         router.replace("/carer");
       } else if (err instanceof ApiError && err.code === "validation_error") {
         setErrors({ form: "Some details need fixing: " + Object.values(err.fieldErrors).join(" · ") });

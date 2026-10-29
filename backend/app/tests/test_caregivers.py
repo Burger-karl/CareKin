@@ -213,6 +213,21 @@ async def test_second_application_is_a_conflict(api, as_user, make_user) -> None
     assert error_code(response) == "caregiver_exists"
 
 
+async def test_caregiver_reads_their_own_application(api, as_user, make_user) -> None:
+    user = await make_user(UserRole.CAREGIVER)
+    created = await apply_as(api, as_user, user)
+    response = await api.get("/caregivers/me")
+    assert response.status_code == 200
+    assert response.json()["id"] == created["id"]
+
+
+async def test_caregiver_without_application_gets_404_on_me(api, as_user, make_user) -> None:
+    as_user(await make_user(UserRole.CAREGIVER))
+    response = await api.get("/caregivers/me")
+    assert response.status_code == 404
+    assert error_code(response) == "caregiver_not_found"
+
+
 async def test_application_needs_two_guarantors(api, as_user, make_user) -> None:
     as_user(await make_user(UserRole.CAREGIVER))
     response = await api.post("/caregivers", json=application(guarantors=[guarantor("08031230001")]))
