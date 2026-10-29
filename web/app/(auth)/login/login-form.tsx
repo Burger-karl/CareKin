@@ -14,6 +14,7 @@ import type { User } from "@/lib/types";
 
 interface Sent {
   resend_after: number;
+  debug_code?: string | null;
 }
 
 /** Only follow same-site paths, so a crafted link can't send people elsewhere. */
@@ -64,7 +65,7 @@ export function LoginForm() {
 
       {sent ? (
         <div className="space-y-4">
-          <OtpForm phone={phone} resendAfter={sent.resend_after} onVerify={login} submitLabel="Sign in" />
+          <OtpForm phone={phone} resendAfter={sent.resend_after} debugCode={sent.debug_code} onVerify={login} submitLabel="Sign in" />
           <button
             type="button"
             className="block w-full text-center text-meta font-semibold text-teal underline"

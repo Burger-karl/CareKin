@@ -51,6 +51,12 @@ export async function POST(req: NextRequest, { params }: { params: { action: str
     const data = await upstream.json().catch(() => null);
     const retry = upstream.headers.get("retry-after");
 
+    // Local dev only: print the test code the mock-SMS backend returns, so it shows in this terminal.
+    const debugCode = (data as { debug_code?: string | null } | null)?.debug_code;
+    if (process.env.NODE_ENV === "development" && upstream.ok && debugCode) {
+      console.log(`[otp] ${(payload as { phone?: string }).phone ?? "?"} -> ${debugCode}`);
+    }
+
     if (!upstream.ok || !SIGN_IN.has(action)) {
       const res = NextResponse.json(data, { status: upstream.status });
       if (retry) res.headers.set("retry-after", retry);

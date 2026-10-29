@@ -14,6 +14,8 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   env: { NEXT_PUBLIC_API_ORIGIN: apiOrigin },
+  // Photos in /public/photos are already resized and compressed, so they are served as they are.
+  images: { unoptimized: true },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

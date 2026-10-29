@@ -15,7 +15,7 @@ import { fetchFacilities } from "@/lib/api/queries";
 import { useUserLocation } from "@/lib/location";
 import { cn } from "@/lib/utils";
 
-const FILTERS = [
+export const FILTERS = [
   { id: "haematologist", label: "Haematologist" },
   { id: "emergency_24h", label: "24 Hours" },
   { id: "blood_bank", label: "Blood Bank" },
@@ -23,9 +23,9 @@ const FILTERS = [
   { id: "genotype_testing", label: "Genotype Testing" },
 ] as const;
 
-const PAGE = 20;
+export const PAGE = 20;
 
-function Chip({ on, children, ...props }: { on: boolean } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+export function Chip({ on, children, ...props }: { on: boolean } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       type="button"
