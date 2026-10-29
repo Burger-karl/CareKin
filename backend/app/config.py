@@ -120,7 +120,13 @@ class Settings(BaseSettings):
     # True routes NIN, background checks, escrow, payments, SMS and WhatsApp to
     # deterministic mocks (build plan Day 3), so a late partner never blocks work.
     USE_MOCK_INTEGRATIONS: bool = True
-    NIN_PROVIDER_API_KEY: SecretStr | None = None
+    # NIN checks for caregiver vetting (ADR 0006). Unset follows USE_MOCK_INTEGRATIONS (mock
+    # when true, Dojah when false). Set "dojah" to call Dojah while other partners stay mocked.
+    NIN_PROVIDER: Literal["mock", "dojah"] | None = None
+    DOJAH_APP_ID: str | None = None
+    DOJAH_SECRET_KEY: SecretStr | None = None
+    # The sandbox is free and returns simulated records. Live: https://api.dojah.io
+    DOJAH_BASE_URL: str = "https://sandbox.dojah.io"
     BACKGROUND_CHECK_API_KEY: SecretStr | None = None
     ESCROW_PARTNER_API_KEY: SecretStr | None = None
     PAYSTACK_SECRET_KEY: SecretStr | None = None
@@ -206,6 +212,14 @@ class Settings(BaseSettings):
     S3_MAX_UPLOAD_BYTES: int = Field(default=10 * 1024 * 1024, ge=1024)
 
     # ----------------------------------------------------------- validators
+    @field_validator("SMS_PROVIDER", "NIN_PROVIDER", mode="before")
+    @classmethod
+    def _blank_means_unset(cls, value: Any) -> Any:
+        """`SMS_PROVIDER=` (as in .env.example) means "follow USE_MOCK_INTEGRATIONS"."""
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def _use_asyncpg_driver(cls, value: Any) -> Any:
@@ -305,6 +319,12 @@ class Settings(BaseSettings):
             problems.append(
                 "LLM_PROVIDER must not be mock in production: users would get canned text"
             )
+        if self.nin_provider == "dojah" and not (self.DOJAH_APP_ID and self.DOJAH_SECRET_KEY):
+            problems.append("Dojah NIN checks need DOJAH_APP_ID and DOJAH_SECRET_KEY")
+        if self.is_production and self.nin_provider == "dojah" and "sandbox" in self.DOJAH_BASE_URL:
+            problems.append(
+                "DOJAH_BASE_URL is the sandbox in production: every NIN check would be simulated"
+            )
         if self.sms_provider == "termii" and not (
             self.SMS_PROVIDER_API_KEY and self.SMS_PROVIDER_BASE_URL
         ):
@@ -340,6 +360,12 @@ class Settings(BaseSettings):
             self.ENVIRONMENT in (Environment.DEVELOPMENT, Environment.TEST)
             and self.USE_MOCK_INTEGRATIONS
         )
+
+    @property
+    def nin_provider(self) -> Literal["mock", "dojah"]:
+        if self.NIN_PROVIDER is not None:
+            return self.NIN_PROVIDER
+        return "mock" if self.USE_MOCK_INTEGRATIONS else "dojah"
 
     @property
     def sms_provider(self) -> Literal["mock", "termii"]:

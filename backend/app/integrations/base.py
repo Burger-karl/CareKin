@@ -15,11 +15,18 @@ Clients never log personal data or secrets.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import httpx
 
 from app.core.exceptions import ServiceUnavailableError
+
+# httpx logs every request's full URL at INFO, and some partners take personal data in
+# the query string (Dojah: ?nin=...). Keep those lines out of the logs whatever level the
+# app or the Celery worker sets.
+for _name in ("httpx", "httpcore"):
+    logging.getLogger(_name).setLevel(logging.WARNING)
 
 
 class IntegrationError(ServiceUnavailableError):

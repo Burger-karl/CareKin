@@ -525,7 +525,7 @@ def test_factories_use_mocks_when_asked(name, factory, mock_cls):
 @pytest.mark.parametrize(("name", "factory", "mock_cls"), FACTORIES)
 def test_factories_never_fall_back_to_mocks(monkeypatch, name, factory, mock_cls):
     monkeypatch.setattr(get_settings(), "USE_MOCK_INTEGRATIONS", False)
-    for key in ("PAYSTACK_SECRET_KEY", "WHATSAPP_ACCESS_TOKEN"):
+    for key in ("PAYSTACK_SECRET_KEY", "WHATSAPP_ACCESS_TOKEN", "DOJAH_SECRET_KEY", "NIN_PROVIDER"):
         monkeypatch.setattr(get_settings(), key, None)
     with pytest.raises(ServiceUnavailableError) as exc:
         factory()
