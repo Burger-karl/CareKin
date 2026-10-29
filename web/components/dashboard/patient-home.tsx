@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Download, MessageCircle, Plus } from "lucide-react";
+import { Download, FileText, MapPin, MessageCircle, Plus, Share2, Users, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, toneFor } from "@/components/brand";
 import { CrisisButton } from "@/components/crisis/crisis-button";
 import { FamilyDialog } from "@/components/dashboard/family-dialog";
 import { FacilityCardCompact } from "@/components/facilities/facility-card";
-import { PageHeader } from "@/components/shell/app-shell";
 import { useSession } from "@/components/session/session";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +31,13 @@ import { cn, firstName, formatDate, formatLongDate, formatTime, greeting, humani
 import type { Booking, Shift } from "@/lib/types";
 
 const TIER_LABEL = { companion: "Companion", trained_carer: "Trained carer", licensed_nurse: "Licensed nurse" } as const;
+
+const ACTIVITY_STYLE = {
+  checkin: { icon: MapPin, tone: "bg-mint text-teal" },
+  share: { icon: Share2, tone: "bg-[#E4ECF8] text-[#2B4C84]" },
+  crisis: { icon: Zap, tone: "bg-crisis-soft text-crisis" },
+  note: { icon: FileText, tone: "bg-amber-soft text-amber-ink" },
+} as const;
 
 const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString();
 const when = (iso: string) => (isToday(iso) ? formatTime(iso) : formatDate(iso));
@@ -69,7 +75,7 @@ function ActiveCaregiverCard() {
 
   if (!active) {
     return (
-      <Card>
+      <Card tone="soft" delay={100}>
         <CardHeader>
           <CardTitle>Active caregiver</CardTitle>
         </CardHeader>
@@ -84,7 +90,7 @@ function ActiveCaregiverCard() {
   const c = caregiver.data;
   const onShift = shift?.status === "in_progress";
   return (
-    <Card>
+    <Card delay={100} lift className="border-t-4 border-t-primary">
       <CardHeader>
         <CardTitle>Active caregiver</CardTitle>
         <Badge variant={onShift ? "mint" : "neutral"} className="text-xs font-semibold">
@@ -166,7 +172,7 @@ export function PatientHome() {
   const lastCrisis = crises.data?.entries[0];
 
   const activity = useMemo(() => {
-    const items: { id: string; title: string; sub: string; at: string }[] = [];
+    const items: { id: string; title: string; sub: string; at: string; kind: "checkin" | "share" | "crisis" | "note" }[] = [];
     const ci = checkIns.data?.find((c) => c.kind === "check_in");
     if (ci && caregiver.data) {
       items.push({
@@ -174,6 +180,7 @@ export function PatientHome() {
         title: "Caregiver checked in",
         sub: `${caregiver.data.full_name}${ci.within_geofence ? " · GPS verified at your address" : ""}`,
         at: ci.client_timestamp,
+        kind: "checkin",
       });
     }
     for (const s of shares.data ?? []) {
@@ -182,6 +189,7 @@ export function PatientHome() {
         title: "Health passport shared",
         sub: `With ${s.facility_name ?? "a facility"} (your consent)`,
         at: s.created_at,
+        kind: "share",
       });
     }
     for (const e of recent.data?.entries ?? []) {
@@ -190,6 +198,7 @@ export function PatientHome() {
         title: e.entry_type === "crisis" ? "Crisis event logged" : humanize(e.entry_type),
         sub: e.summary,
         at: e.occurred_at,
+        kind: e.entry_type === "crisis" ? "crisis" : "note",
       });
     }
     return items.sort((a, b) => +new Date(b.at) - +new Date(a.at)).slice(0, 4);
@@ -212,18 +221,43 @@ export function PatientHome() {
 
   return (
     <div>
-      <PageHeader
-        title={`${greeting()}, ${name}`}
-        subtitle={`${formatLongDate()}${isSelf ? "" : ` · Caring for ${firstName(patient.full_name)}`}`}
-      />
+      <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-[#0F8577] via-[#0C7367] to-[#075248] p-6 text-white shadow-lg shadow-teal/20 animate-in fade-in-0 slide-in-from-top-2 duration-500 md:p-8">
+        <div aria-hidden className="absolute -right-10 -top-16 size-56 rounded-full bg-white/10" />
+        <div aria-hidden className="absolute -bottom-20 right-24 size-44 rounded-full bg-crisis/20" />
+        <div className="relative">
+          <p className="text-[14px] text-white/80">
+            {formatLongDate()}
+            {isSelf ? "" : ` · Caring for ${firstName(patient.full_name)}`}
+          </p>
+          <h1 className="mt-1 text-[28px] font-bold leading-9 md:text-[34px] md:leading-10">
+            {greeting()}, {name}
+          </h1>
+          <nav aria-label="Quick actions" className="mt-4 flex flex-wrap gap-2">
+            {[
+              { href: "/caregivers", label: "Find a caregiver", icon: Users },
+              { href: "/facilities", label: "Facilities", icon: MapPin },
+              { href: "/passport", label: "Passport", icon: FileText },
+              { href: "/messages", label: "Messages", icon: MessageCircle },
+            ].map(({ href, label, icon: Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-white/15 px-4 text-[14px] font-semibold backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/25"
+              >
+                <Icon className="size-4" aria-hidden /> {label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      </div>
 
       <div className="flex flex-col gap-5 lg:grid lg:grid-cols-3 lg:items-start">
         {/* Column 1 */}
         <div className="contents lg:flex lg:flex-col lg:gap-5">
-          <Card className="order-1 flex flex-col items-center py-6 lg:order-none">
+          <Card tone="crisis" delay={0} className="order-1 flex flex-col items-center py-6 lg:order-none">
             <CrisisButton patientId={patient.id} />
             {nearest && (
-              <div className="mt-5 hidden w-full rounded-lg bg-mint-soft p-4 lg:block">
+              <div className="mt-5 hidden w-full rounded-lg bg-white/80 p-4 shadow-sm lg:block">
                 <p className="ck-meta text-foreground/80">Nearest SCD facility</p>
                 <p className="mt-0.5 text-[17px] font-bold text-teal">{nearest.facility.name}</p>
                 <p className="ck-meta">
@@ -233,7 +267,7 @@ export function PatientHome() {
             )}
           </Card>
 
-          <section aria-labelledby="nearby-heading" className="order-4 lg:order-none lg:ck-card lg:p-5">
+          <section aria-labelledby="nearby-heading" className="order-4 animate-in fade-in-0 slide-in-from-bottom-3 duration-500 fill-mode-both [animation-delay:150ms] lg:order-none lg:ck-card lg:p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 id="nearby-heading" className="text-[17px] font-bold">
                 <span className="lg:hidden">Nearest SCD facilities</span>
@@ -264,7 +298,7 @@ export function PatientHome() {
           <div className="order-2 lg:order-none">
             <ActiveCaregiverCard />
           </div>
-          <Card className="order-5 lg:order-none">
+          <Card delay={250} className="order-5 lg:order-none">
             <CardHeader>
               <CardTitle>Recent activity</CardTitle>
             </CardHeader>
@@ -273,8 +307,17 @@ export function PatientHome() {
             ) : (
               <ul className="divide-y divide-line">
                 {activity.map((a) => (
-                  <li key={a.id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                    <div className="min-w-0">
+                  <li key={a.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                    <span
+                      className={cn("mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full", ACTIVITY_STYLE[a.kind].tone)}
+                      aria-hidden
+                    >
+                      {(() => {
+                        const Icon = ACTIVITY_STYLE[a.kind].icon;
+                        return <Icon className="size-4" />;
+                      })()}
+                    </span>
+                    <div className="min-w-0 flex-1">
                       <p className="text-[16px] font-bold">{a.title}</p>
                       <p className="ck-meta break-words">{a.sub}</p>
                     </div>
@@ -290,7 +333,7 @@ export function PatientHome() {
 
         {/* Column 3 */}
         <div className="contents lg:flex lg:flex-col lg:gap-5">
-          <Card className="order-3 lg:order-none">
+          <Card delay={200} lift className="order-3 lg:order-none">
             <CardHeader>
               <CardTitle>Health passport</CardTitle>
               <button
@@ -302,15 +345,15 @@ export function PatientHome() {
               </button>
             </CardHeader>
             <div className="grid grid-cols-3 gap-2.5">
-              <Tile className="text-center">
+              <Tile className="bg-crisis-soft text-center">
                 <p className="ck-meta">Blood type</p>
-                <p className="mt-1 text-[26px] font-bold leading-8 text-teal">{patient.blood_group ?? "—"}</p>
+                <p className="mt-1 text-[26px] font-bold leading-8 text-crisis">{patient.blood_group ?? "—"}</p>
               </Tile>
-              <Tile className="text-center">
+              <Tile className="bg-amber-soft text-center">
                 <p className="ck-meta">Genotype</p>
-                <p className="mt-1 text-[26px] font-bold leading-8 text-teal">{patient.genotype ?? "—"}</p>
+                <p className="mt-1 text-[26px] font-bold leading-8 text-amber-ink">{patient.genotype ?? "—"}</p>
               </Tile>
-              <Tile className="text-center">
+              <Tile className="bg-mint text-center">
                 <p className="ck-meta">Crises (yr)</p>
                 <p className="mt-1 text-[26px] font-bold leading-8 text-teal">{crises.data?.total_entries ?? "—"}</p>
               </Tile>
@@ -351,7 +394,7 @@ export function PatientHome() {
             </div>
           </Card>
 
-          <Card className="order-6 lg:order-none">
+          <Card tone="blue" delay={350} className="order-6 lg:order-none">
             <CardHeader className="mb-3">
               <div>
                 <CardTitle>CareKin Companion</CardTitle>
@@ -362,7 +405,7 @@ export function PatientHome() {
               </Badge>
             </CardHeader>
             {me.consents.llm_processing ? (
-              <p className="rounded-lg bg-mint-soft p-4 text-[15px] italic leading-snug">
+              <p className="rounded-lg bg-white/80 p-4 text-[15px] italic leading-snug shadow-sm">
                 “Good morning {firstName(patient.full_name)}! Have you had your medication today? Remember to stay hydrated.”
               </p>
             ) : (
@@ -379,7 +422,7 @@ export function PatientHome() {
           </Card>
 
           {patient.access !== "family" && (
-            <Card className="order-7 lg:order-none">
+            <Card tone="soft" delay={450} className="order-7 lg:order-none">
               <CardHeader className="mb-3">
                 <CardTitle>Family access</CardTitle>
                 <button onClick={() => setFamilyOpen(true)} className="text-sm font-semibold text-teal hover:underline">

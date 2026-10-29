@@ -55,11 +55,98 @@
   }
 }
 
+/* Every card in the app rises into place. Cards in a list follow each other. */
+@keyframes ck-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ck-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ck-shine {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* "backwards" so the resting state is free to change on hover. */
+#main .ck-card {
+  animation: ck-rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+#main .ck-card:nth-child(1),
+#main li:nth-child(1) > .ck-card {
+  animation-delay: 0ms;
+}
+#main .ck-card:nth-child(2),
+#main li:nth-child(2) > .ck-card {
+  animation-delay: 70ms;
+}
+#main .ck-card:nth-child(3),
+#main li:nth-child(3) > .ck-card {
+  animation-delay: 140ms;
+}
+#main .ck-card:nth-child(4),
+#main li:nth-child(4) > .ck-card {
+  animation-delay: 210ms;
+}
+#main .ck-card:nth-child(5),
+#main li:nth-child(5) > .ck-card {
+  animation-delay: 280ms;
+}
+#main .ck-card:nth-child(6),
+#main li:nth-child(6) > .ck-card {
+  animation-delay: 350ms;
+}
+#main .ck-card:nth-child(7),
+#main li:nth-child(7) > .ck-card {
+  animation-delay: 420ms;
+}
+#main .ck-card:nth-child(8),
+#main li:nth-child(8) > .ck-card {
+  animation-delay: 490ms;
+}
+
+#main a.ck-card {
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+#main a.ck-card:hover {
+  transform: translateY(-3px);
+  border-color: #9dc9c3;
+  box-shadow: 0 12px 28px -12px rgb(15 133 119 / 0.35);
+}
+
+.ck-banner-in {
+  animation: ck-rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+/* People who ask for less motion keep the fade, lose the movement. */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+  #main .ck-card,
+  .ck-banner-in {
+    animation-name: ck-fade;
+  }
+  #main a.ck-card:hover {
+    transform: none;
+  }
+  .animate-float,
+  .animate-halo {
+    animation: none;
   }
 }

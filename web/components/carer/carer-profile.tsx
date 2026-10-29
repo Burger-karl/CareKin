@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Check, Clock, LogOut } from "lucide-react";
 import { AvailabilityCard } from "@/components/carer/availability-card";
+import { WorkAreaCard } from "@/components/carer/work-area-card";
 import { useSession } from "@/components/session/session";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,8 @@ export function CarerProfile() {
           </Button>
         </Card>
       )}
+
+      {caregiver && <WorkAreaCard caregiver={caregiver} />}
 
       {id && <AvailabilityCard caregiverId={id} />}
 

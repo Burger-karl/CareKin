@@ -20,7 +20,7 @@ import re
 import uuid
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import (
     AfterValidator,
@@ -441,6 +441,17 @@ class CaregiverMatch(BaseModel):
     factors: MatchFactors
 
 
+class CaregiverUnavailable(BaseModel):
+    """A caregiver who fits the place and level but can't take this slot. Name and reason only: not bookable."""
+
+    caregiver_id: uuid.UUID
+    full_name: str
+    tier: CaregiverTier
+    reason: Literal["busy", "outside_hours"] = Field(
+        description="busy: another booking overlaps the slot. outside_hours: the slot isn't inside their weekly hours."
+    )
+
+
 class MatchOut(BaseModel):
     patient_id: uuid.UUID
     guardian_approval_required: bool = Field(
@@ -448,6 +459,10 @@ class MatchOut(BaseModel):
     )
     min_tier_applied: CaregiverTier | None
     results: list[CaregiverMatch]
+    unavailable: list[CaregiverUnavailable] = Field(
+        default_factory=list,
+        description="Near enough and qualified, but not free for this slot. Shown so people know why.",
+    )
 
 
 class VerifyOut(BaseModel):

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { LocateFixed, MapPin, Search } from "lucide-react";
+import { Hospital, LocateFixed, MapPin, Search } from "lucide-react";
 import { FacilityCardFull } from "@/components/facilities/facility-card";
 import { ShareDialog } from "@/components/facilities/share-dialog";
 import { PageHeader } from "@/components/shell/app-shell";
@@ -32,7 +32,7 @@ export function Chip({ on, children, ...props }: { on: boolean } & React.ButtonH
       aria-pressed={on}
       className={cn(
         "shrink-0 rounded-full px-4 py-2.5 text-[15px] font-medium leading-tight transition-colors",
-        on ? "bg-mint font-semibold text-teal" : "bg-muted text-foreground/80 hover:bg-[#dfeceb]",
+        on ? "bg-primary font-semibold text-white shadow-md shadow-teal/25" : "bg-white text-foreground/80 ring-1 ring-line hover:bg-mint-soft",
       )}
       {...props}
     >
@@ -86,10 +86,10 @@ export function FacilityFinder() {
 
   return (
     <div>
-      <PageHeader title="SCD Facilities" subtitle="Places that can treat a crisis" />
+      <PageHeader title="SCD Facilities" subtitle="Places that can treat a crisis" icon={Hospital} tone="cyan" />
 
       <div className="mx-auto max-w-2xl lg:mx-0">
-        <div className="flex items-center gap-3 rounded-xl border-[1.5px] border-line bg-mint-soft px-4 py-3.5">
+        <div className="flex items-center gap-3 rounded-xl border-[1.5px] border-[#BEDCD8] bg-gradient-to-r from-mint to-white px-4 py-3.5 shadow-sm">
           <MapPin className="size-5 shrink-0 text-muted-foreground" aria-hidden />
           <p className="min-w-0 flex-1 truncate text-[16px] font-bold">{locationLabel}</p>
           <button onClick={() => setLocOpen(true)} className="text-[15px] font-medium text-muted-foreground hover:text-teal">

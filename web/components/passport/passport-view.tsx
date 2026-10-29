@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Calendar, Download, Droplet, FlaskConical, Pill, Plus, Share2, Shield, TriangleAlert } from "lucide-react";
+import { Calendar, Download, Droplet, FlaskConical, HeartPulse, Pill, Plus, Share2, Shield, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { AddEntryDialog } from "@/components/passport/add-entry-dialog";
 import { SharePicker } from "@/components/passport/share-picker";
@@ -31,7 +31,7 @@ const ICONS: Record<PassportEntryType, { icon: typeof Calendar; box: string; col
 function EntryCard({ e }: { e: PassportEntry }) {
   const { icon: Icon, box, color } = ICONS[e.entry_type];
   return (
-    <li className="ck-card flex gap-3.5 p-4">
+    <li className="ck-card flex gap-3.5 p-4 transition duration-300 hover:-translate-y-0.5 hover:shadow-md hover:shadow-teal/10">
       <span className={cn("flex size-12 shrink-0 items-center justify-center rounded-xl", box)} aria-hidden>
         <Icon className={cn("size-6", color)} />
       </span>
@@ -101,38 +101,47 @@ export function PassportView() {
 
   return (
     <div>
-      <PageHeader title="Health Passport" subtitle="Show this at any hospital" />
+      <PageHeader title="Health Passport" subtitle="Show this at any hospital" icon={HeartPulse} tone="coral" />
 
       <div className="mx-auto max-w-2xl space-y-4 lg:mx-0">
-        <Card className="border-[#BEDCD8] bg-mint">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-[17px] font-bold text-teal">Your medical profile</h2>
-            <Shield className="size-5 text-teal" aria-hidden />
-          </div>
-          <dl className="grid grid-cols-3 gap-2">
-            {[
-              ["Blood type", patient.blood_group ?? p?.patient.blood_group ?? "—"],
-              ["Genotype", patient.genotype ?? p?.patient.genotype ?? "—"],
-              ["Age", String(patient.age)],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <dt className="ck-meta text-[15px]">{label}</dt>
-                <dd className="text-[28px] font-bold leading-9 text-teal">{value}</dd>
-              </div>
-            ))}
-          </dl>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <Button size="lg" onClick={exportPdf} loading={exporting}>
-              <Download /> Export PDF
-            </Button>
-            <Button size="lg" variant="secondary" onClick={() => setPickOpen(true)} disabled={!canManage}>
-              <Share2 /> Share
-            </Button>
+        <Card tone="teal" className="relative overflow-hidden shadow-lg shadow-teal/20">
+          <div aria-hidden className="absolute -right-8 -top-10 size-40 rounded-full bg-white/10" />
+          <div className="relative">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-[17px] font-bold">Your medical profile</h2>
+              <Shield className="size-5 text-white/80" aria-hidden />
+            </div>
+            <dl className="grid grid-cols-3 gap-2.5">
+              {[
+                ["Blood type", patient.blood_group ?? p?.patient.blood_group ?? "—"],
+                ["Genotype", patient.genotype ?? p?.patient.genotype ?? "—"],
+                ["Age", String(patient.age)],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-xl bg-white/15 px-3 py-2.5 backdrop-blur">
+                  <dt className="text-[13px] text-white/75">{label}</dt>
+                  <dd className="text-[28px] font-bold leading-9">{value}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <Button size="lg" className="bg-white text-teal hover:bg-white/90" onClick={exportPdf} loading={exporting}>
+                <Download /> Export PDF
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-white/50 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                onClick={() => setPickOpen(true)}
+                disabled={!canManage}
+              >
+                <Share2 /> Share
+              </Button>
+            </div>
           </div>
         </Card>
 
         <div className="grid grid-cols-2 gap-3">
-          <Card className="p-4">
+          <Card tone="amber" className="p-4">
             <p className="ck-meta mb-1.5 text-[15px]">Common triggers</p>
             {passport.isPending ? <Skeleton className="h-14" /> : triggers.length ? (
               <ul className="space-y-0.5 text-[16px]">{triggers.map((t) => <li key={t}>{t}</li>)}</ul>
@@ -140,7 +149,7 @@ export function PassportView() {
               <p className="ck-meta">None added</p>
             )}
           </Card>
-          <Card className="p-4">
+          <Card tone="blue" className="p-4">
             <p className="ck-meta mb-1.5 text-[15px]">Current meds</p>
             {passport.isPending ? <Skeleton className="h-14" /> : meds.length ? (
               <ul className="space-y-0.5 text-[16px]">{meds.map((m) => <li key={m}>{m}</li>)}</ul>
@@ -173,7 +182,7 @@ export function PassportView() {
                 onClick={() => setFilter(id)}
                 className={cn(
                   "shrink-0 rounded-full px-4 py-2 text-[15px] font-medium",
-                  filter === id ? "bg-mint font-semibold text-teal" : "bg-muted text-foreground/80",
+                  filter === id ? "bg-primary font-semibold text-white shadow-md shadow-teal/25" : "bg-white text-foreground/80 ring-1 ring-line hover:bg-mint-soft",
                 )}
               >
                 {label}
@@ -210,7 +219,7 @@ export function PassportView() {
         <ul className="space-y-3">{entries.map((e) => <EntryCard key={e.id} e={e} />)}</ul>
 
         {activeShares.length > 0 && (
-          <Card>
+          <Card tone="soft">
             <h2 className="mb-3 text-[17px] font-bold">Shared right now</h2>
             <ul className="divide-y divide-line">
               {activeShares.map((s) => (

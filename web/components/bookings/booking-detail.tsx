@@ -179,7 +179,6 @@ export function BookingDetail({ id }: { id: string }) {
   const name = caregiver.data?.full_name ?? "Caregiver";
   const canAct = b.access === "patient_side" && patient?.access !== "family";
   const canPay = b.access === "patient_side";
-  const defaultGateway = me.role === "family_abroad" ? "stripe" : "paystack";
 
   return (
     <div className="mx-auto max-w-xl space-y-4 lg:mx-0">
@@ -233,7 +232,7 @@ export function BookingDetail({ id }: { id: string }) {
           )}
         </Card>
       )}
-      {b.status === "accepted" && canPay && <PayPanel booking={b} defaultGateway={defaultGateway} />}
+      {b.status === "accepted" && canPay && <PayPanel booking={b} />}
       {b.status === "accepted" && !canPay && (
         <Card>
           <p className="text-body">Accepted. Waiting for payment.</p>

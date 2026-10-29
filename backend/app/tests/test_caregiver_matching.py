@@ -322,6 +322,33 @@ async def test_a_caregiver_with_an_overlapping_booking_is_left_out(api, db) -> N
     assert names(await match(api, patient_user, patient)) == ["Free"]
 
 
+async def test_a_busy_caregiver_is_listed_as_unavailable(api, db) -> None:
+    patient_user, patient = await make_patient(db)
+    busy = await make_caregiver(db, name="Busy")
+    await make_caregiver(db, name="Free")
+    starts_at, ends_at = slot()
+    db.add(
+        Booking(
+            patient_id=patient.id,
+            caregiver_id=busy.id,
+            booked_by=patient_user.id,
+            booking_type=BookingType.HOURLY,
+            status=BookingStatus.PAID,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            service_location=point(*ENUGU),
+            service_address="12 Ogui Road, Enugu",
+            rate_minor=250_000,
+            total_minor=1_000_000,
+            currency="NGN",
+        )
+    )
+    await db.commit()
+    response = await match(api, patient_user, patient)
+    assert names(response) == ["Free"]
+    assert [(u["full_name"], u["reason"]) for u in response.json()["unavailable"]] == [("Busy", "busy")]
+
+
 async def test_language_preference_changes_the_order(api, db) -> None:
     patient_user, patient = await make_patient(db)
     await make_caregiver(db, name="English Only", km=1, languages=["english"])

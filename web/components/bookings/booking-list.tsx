@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { CalendarDays, CheckCircle2, ChevronRight, Hourglass, Sparkles } from "lucide-react";
 import { Avatar, toneFor } from "@/components/brand";
 import { PageHeader } from "@/components/shell/app-shell";
 import { useSession } from "@/components/session/session";
@@ -51,10 +51,36 @@ export function BookingList() {
       .sort((a, z) => +new Date(z.starts_at) - +new Date(a.starts_at));
   }, [bookings.data, patient, tab]);
 
+  const counts = useMemo(() => {
+    const mine = (bookings.data ?? []).filter((b) => !patient || b.patient_id === patient.id);
+    return {
+      active: mine.filter((b) => ["accepted", "paid", "in_progress"].includes(b.status)).length,
+      waiting: mine.filter((b) => ["requested", "pending_guardian", "disputed"].includes(b.status)).length,
+      done: mine.filter((b) => b.status === "completed").length,
+    };
+  }, [bookings.data, patient]);
+
   return (
     <div>
-      <PageHeader title="Bookings" subtitle="Your caregivers and what's been paid" />
+      <PageHeader title="Bookings" subtitle="Your caregivers and what's been paid" icon={CalendarDays} tone="blue" />
       <div className="mx-auto max-w-2xl lg:mx-0">
+        <div className="mb-4 grid grid-cols-3 gap-3">
+          {(
+            [
+              ["Active", counts.active, Sparkles, "bg-mint text-teal"],
+              ["Waiting", counts.waiting, Hourglass, "bg-amber-soft text-amber-ink"],
+              ["Done", counts.done, CheckCircle2, "bg-[#E4ECF8] text-[#2B4C84]"],
+            ] as const
+          ).map(([label, n, Icon, tone]) => (
+            <div key={label} className="ck-card flex flex-col items-center gap-1 p-3 text-center">
+              <span className={cn("flex size-9 items-center justify-center rounded-full", tone)} aria-hidden>
+                <Icon className="size-4" />
+              </span>
+              <span className="text-[24px] font-bold leading-7">{bookings.isPending ? "–" : n}</span>
+              <span className="ck-meta">{label}</span>
+            </div>
+          ))}
+        </div>
         <div className="mb-4 flex gap-2" role="group" aria-label="Bookings">
           {(
             [
@@ -68,7 +94,7 @@ export function BookingList() {
               onClick={() => setTab(id)}
               className={cn(
                 "rounded-full px-5 py-2.5 text-[15px] font-medium",
-                tab === id ? "bg-mint font-semibold text-teal" : "bg-muted text-foreground/80",
+                tab === id ? "bg-primary font-semibold text-white shadow-md shadow-teal/25" : "bg-white text-foreground/80 ring-1 ring-line hover:bg-mint-soft",
               )}
             >
               {label}

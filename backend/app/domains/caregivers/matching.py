@@ -69,6 +69,8 @@ PRIOR_RATING = 4.0
 PRIOR_REVIEWS = 3
 # Experience counts up to this many years.
 EXPERIENCE_CAP_YEARS = 10
+# How many "not free for this slot" caregivers a search lists.
+MAX_UNAVAILABLE_SHOWN = 20
 # A window ending at or after this time reaches midnight (end_time can't be 24:00).
 END_OF_DAY = time(23, 59)
 _DAY_SECONDS = 24 * 60 * 60
@@ -244,7 +246,6 @@ async def match_caregivers(
             Caregiver.service_radius_km.is_not(None),
             Caregiver.tier.in_(allowed_tiers),
             Caregiver.user_id.not_in(excluded_users),
-            Caregiver.id.not_in(busy),
             func.ST_DWithin(
                 Caregiver.base_location, search_point, Caregiver.service_radius_km * 1000
             ),
@@ -252,9 +253,27 @@ async def match_caregivers(
         .options(selectinload(Caregiver.availability_windows))
     )
 
+    busy_ids = set((await db.scalars(busy)).all())
     results: list[s.CaregiverMatch] = []
+    unavailable: list[s.CaregiverUnavailable] = []
     for caregiver, full_name, distance in (await db.execute(stmt)).all():
-        if not is_available(caregiver.availability_windows, data.starts_at, data.ends_at):
+        # Close enough and qualified, but not free: keep them so the page can say why.
+        reason = (
+            "busy"
+            if caregiver.id in busy_ids
+            else None
+            if is_available(caregiver.availability_windows, data.starts_at, data.ends_at)
+            else "outside_hours"
+        )
+        if reason is not None:
+            unavailable.append(
+                s.CaregiverUnavailable(
+                    caregiver_id=caregiver.id,
+                    full_name=full_name,
+                    tier=caregiver.tier,
+                    reason=reason,
+                )
+            )
             continue
         distance_km = round(distance / 1000, 1)
         fit = score(
@@ -288,6 +307,8 @@ async def match_caregivers(
     # Best score first; ties go to the nearer caregiver, then a stable id order.
     results.sort(key=lambda m: (-m.score, m.distance_km, str(m.caregiver_id)))
     results = results[: data.limit]
+    unavailable.sort(key=lambda u: (u.full_name, str(u.caregiver_id)))
+    unavailable = unavailable[:MAX_UNAVAILABLE_SHOWN]
 
     write_audit(
         db,
@@ -308,4 +329,5 @@ async def match_caregivers(
         guardian_approval_required=context.guardian_approval_required,
         min_tier_applied=min_tier,
         results=results,
+        unavailable=unavailable,
     )

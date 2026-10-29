@@ -20,6 +20,7 @@ import { ApiError, api, errorMessage } from "@/lib/api/client";
 import { useCaregiver } from "@/lib/api/queries";
 import { useUserLocation } from "@/lib/location";
 import { priceMinor, shiftCount, slotFromParams, slotHours, slotIso, slotProblem, slotToQuery, type Slot } from "@/lib/slot";
+import { CurrencyPicker, Estimate, EstimateNote } from "@/components/fx/estimate";
 import { formatMoney, initials } from "@/lib/utils";
 import type { Booking } from "@/lib/types";
 
@@ -197,6 +198,12 @@ export function CaregiverProfile({ id }: { id: string }) {
             <div className="mt-3 flex items-end justify-between gap-3">
               <p className="text-[16px]">Held in escrow</p>
               <p className="text-[32px] font-bold leading-9 text-teal">{problem ? "—" : formatMoney(total)}</p>
+            </div>
+            {!problem && <Estimate minor={total} className="mt-0.5 block text-right text-[17px]" />}
+            <div className="mt-3">
+              <p className="ck-label mb-1.5">See the price in</p>
+              <CurrencyPicker />
+              <EstimateNote className="mt-2" />
             </div>
             <p className="mt-2 text-[15px] leading-snug text-foreground/80">
               Paid to a licensed escrow partner. Released after check-out and your confirmation. You pay once {c.full_name.split(" ")[0]} accepts.

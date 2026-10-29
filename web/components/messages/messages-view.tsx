@@ -71,8 +71,10 @@ export function MessagesView() {
       <PageHeader
         title="Messages"
         subtitle="Your caregivers, doctor and Companion"
+        icon={MessageCircle}
+        tone="green"
         action={
-          <Link href="/settings" aria-label="Settings" className="mt-1 rounded-full p-2 text-teal hover:bg-mint-soft">
+          <Link href="/settings" aria-label="Settings" className="rounded-full bg-white/15 p-2.5 text-white transition hover:bg-white/25">
             <Settings className="size-6" />
           </Link>
         }
@@ -98,7 +100,7 @@ export function MessagesView() {
               onClick={() => setTab(id)}
               className={cn(
                 "shrink-0 rounded-full px-5 py-2.5 text-[16px] font-medium",
-                tab === id ? "bg-mint font-semibold text-teal" : "bg-muted text-foreground/80",
+                tab === id ? "bg-primary font-semibold text-white shadow-md shadow-teal/25" : "bg-white text-foreground/80 ring-1 ring-line hover:bg-mint-soft",
               )}
             >
               {label}
@@ -110,7 +112,7 @@ export function MessagesView() {
           {showCaregivers && bookings.isPending && <Skeleton className="h-24 rounded-xl" />}
           {showCaregivers && caregiverBookings.map((b) => <CaregiverRow key={b.caregiver_id} b={b} term={term} />)}
           {showCompanion && (
-            <li className="ck-card flex items-center gap-4 p-4">
+            <li className="ck-card flex items-center gap-4 border-[#C9D9F2] bg-gradient-to-r from-[#E9F0FB] to-white p-4">
               <span className="relative">
                 <Avatar label="" className="size-16 bg-mint text-teal" />
                 <MessageCircle className="absolute inset-0 m-auto size-7 text-teal" aria-hidden />
