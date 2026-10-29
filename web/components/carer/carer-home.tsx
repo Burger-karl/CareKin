@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, errorMessage } from "@/lib/api/client";
-import { useClient, useMyCaregiver } from "@/lib/api/carer-queries";
+import { useAvailability, useClient, useMyCaregiver } from "@/lib/api/carer-queries";
 import { keys, useShifts } from "@/lib/api/queries";
 import { bookingSummary } from "@/lib/booking";
 import { firstName, formatLongDate, formatMoney } from "@/lib/utils";
@@ -80,6 +80,8 @@ export function CarerHome() {
     .sort((a, z) => +new Date(a.starts_at) - +new Date(z.starts_at));
 
   const notApproved = caregiver && caregiver.status !== "approved";
+  const hours = useAvailability(caregiver?.status === "approved" ? id : null);
+  const noHours = hours.isSuccess && hours.data.windows.length === 0;
 
   return (
     <div className="space-y-4">
@@ -109,6 +111,18 @@ export function CarerHome() {
           <Link href="/carer/profile" className="mt-2 inline-block text-sm font-semibold underline">
             See your checks
           </Link>
+        </Card>
+      )}
+
+      {noHours && (
+        <Card className="border-[#F2D9A4] bg-amber-soft">
+          <p className="font-bold text-amber-ink">Set your hours so families can find you</p>
+          <p className="mt-1 text-[15px] text-amber-ink">
+            You&apos;re approved, but no family can book you until you say which days and times you can work.
+          </p>
+          <Button asChild className="mt-3">
+            <Link href="/carer/profile">Set my hours</Link>
+          </Button>
         </Card>
       )}
 

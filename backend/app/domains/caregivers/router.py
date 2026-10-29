@@ -52,6 +52,12 @@ async def match_caregivers(
     return await matching.match_caregivers(db, user, data, request)
 
 
+@router.get("/me", response_model=s.CaregiverOut)
+async def get_my_caregiver(user: CaregiverUser, db: DbSession) -> s.CaregiverOut:
+    """The signed-in caregiver's own application, whatever device they apply from. 404 if they haven't applied."""
+    return await service.get_my_caregiver(db, user)
+
+
 @router.get("/{caregiver_id}", response_model=s.CaregiverOut | s.CaregiverPublicOut)
 async def get_caregiver(
     caregiver_id: uuid.UUID, user: CurrentUser, db: DbSession

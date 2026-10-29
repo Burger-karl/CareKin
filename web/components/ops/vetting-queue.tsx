@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/input";
+import { Input, Textarea } from "@/components/ui/input";
 import { Field } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, api, errorMessage } from "@/lib/api/client";
@@ -39,6 +39,121 @@ function segments(c: PendingCaregiver): { label: string; seg: Seg }[] {
 
 const tierLabel = (t: string) => humanize(t);
 
+/** The backend words blockers for developers; show people what to do instead. */
+function friendlyBlocker(b: string) {
+  if (b.startsWith("verification has not been run")) return "Identity checks have not started";
+  return b.charAt(0).toUpperCase() + b.slice(1);
+}
+
+interface VerifyResult {
+  checks: { check_type: string; status: string }[];
+}
+
+function RunNinCheck({ c }: { c: PendingCaregiver }) {
+  const qc = useQueryClient();
+  const [nin, setNin] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const run = useMutation({
+    mutationFn: (digits: string) =>
+      api<VerifyResult>(`caregivers/${c.id}/verify`, { body: { checks: ["nin"], nin: digits } }),
+    onSuccess: (r) => {
+      setNin("");
+      const status = r.checks.filter((x) => x.check_type === "nin").at(-1)?.status;
+      if (status === "passed") toast.success("NIN check passed.");
+      else toast.error(`NIN check ${status ?? "did not finish"}. Review the caregiver before deciding.`);
+      void qc.invalidateQueries({ queryKey: ["ops-caregivers"] });
+      void qc.invalidateQueries({ queryKey: ["ops-dashboard"] });
+    },
+    onError: (e) => setError(errorMessage(e)),
+  });
+
+  return (
+    <form
+      className="mb-4 rounded-xl border-[1.5px] border-line bg-mint-soft p-4"
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        setError(null);
+        const digits = nin.replace(/\D/g, "");
+        if (digits.length !== 11) return setError("A NIN is exactly 11 digits.");
+        run.mutate(digits);
+      }}
+    >
+      <Field
+        label={c.checks.nin ? "Run the NIN check again" : "Run NIN check"}
+        htmlFor="nin"
+        error={error}
+        hint="Ask the caregiver for their NIN. It is sent to the verifier and never stored."
+      >
+        <Input
+          id="nin"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={13}
+          placeholder="11-digit NIN"
+          value={nin}
+          onChange={(e) => setNin(e.target.value.replace(/\D/g, ""))}
+          aria-invalid={!!error}
+        />
+      </Field>
+      <Button type="submit" className="mt-3 w-full" loading={run.isPending}>
+        {c.checks.nin ? "Run again" : "Run NIN check"}
+      </Button>
+    </form>
+  );
+}
+
+/**
+ * Local testing only (never in a production build): runs the mock background check, marks every
+ * uploaded certificate as verified, then approves. Real vetting needs a person to review each one.
+ */
+function MockRest({ c, onDone }: { c: PendingCaregiver; onDone: () => void }) {
+  const qc = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const run = useMutation({
+    mutationFn: async () => {
+      if (c.checks.background !== "passed") {
+        await api(`caregivers/${c.id}/verify`, { body: { checks: ["background"] } });
+      }
+      const full = await api<{ certifications: { id: string; status: string }[] }>(`caregivers/${c.id}`);
+      const certifications = full.certifications
+        .filter((x) => x.status !== "verified")
+        .map((x) => ({ id: x.id, status: "verified" }));
+      await api(`ops/caregivers/${c.id}/approve`, { body: { certifications } });
+    },
+    onSuccess: () => {
+      toast.success("Mock checks done. Caregiver approved.");
+      void qc.invalidateQueries({ queryKey: ["ops-caregivers"] });
+      void qc.invalidateQueries({ queryKey: ["ops-dashboard"] });
+      onDone();
+    },
+    onError: (e) => {
+      if (e instanceof ApiError && e.code === "caregiver_not_ready") {
+        const b = (e.details as { blockers?: string[] } | undefined)?.blockers;
+        setError(b?.length ? `Still blocked: ${b.map(friendlyBlocker).join("; ")}` : e.message);
+      } else setError(errorMessage(e));
+      void qc.invalidateQueries({ queryKey: ["ops-caregivers"] });
+    },
+  });
+
+  return (
+    <div className="mb-4 rounded-xl border-[1.5px] border-dashed border-amber bg-[#FFF8E6] p-4">
+      <p className="text-[14px] font-bold">Test mode</p>
+      <p className="mt-1 text-[13px] text-muted-foreground">
+        Mock the background check, verify all certificates and approve. Only shows on your computer.
+      </p>
+      {error && (
+        <p role="alert" className="mt-2 text-meta font-medium text-crisis-ink">
+          {error}
+        </p>
+      )}
+      <Button type="button" variant="secondary" className="mt-3 w-full" loading={run.isPending} onClick={() => { setError(null); run.mutate(); }}>
+        Mock the rest &amp; approve
+      </Button>
+    </div>
+  );
+}
+
 function DecisionDialog({ c, onClose }: { c: PendingCaregiver | null; onClose: () => void }) {
   const qc = useQueryClient();
   const [rejecting, setRejecting] = useState(false);
@@ -56,7 +171,7 @@ function DecisionDialog({ c, onClose }: { c: PendingCaregiver | null; onClose: (
     onError: (e) => {
       if (e instanceof ApiError && e.code === "caregiver_not_ready") {
         const b = (e.details as { blockers?: string[] } | undefined)?.blockers;
-        setError(b?.length ? `Not ready: ${b.join("; ")}` : e.message);
+        setError(b?.length ? `Not ready: ${b.map(friendlyBlocker).join("; ")}` : e.message);
       } else setError(errorMessage(e));
     },
   });
@@ -80,10 +195,14 @@ function DecisionDialog({ c, onClose }: { c: PendingCaregiver | null; onClose: (
             </li>
           ))}
         </ul>
+        {c.checks.nin !== "passed" && <RunNinCheck c={c} />}
+        {process.env.NODE_ENV === "development" && c.checks.nin === "passed" && c.guarantor_count >= 2 && (
+          <MockRest c={c} onDone={onClose} />
+        )}
         {c.blockers.length > 0 && (
           <ul className="mb-4 list-disc rounded-lg bg-amber-soft py-3 pl-8 pr-4 text-[14px] text-amber-ink">
             {c.blockers.map((b) => (
-              <li key={b}>{b}</li>
+              <li key={b}>{friendlyBlocker(b)}</li>
             ))}
           </ul>
         )}
@@ -135,11 +254,13 @@ function DecisionDialog({ c, onClose }: { c: PendingCaregiver | null; onClose: (
 }
 
 export function VettingQueue({ full = false }: { full?: boolean }) {
-  const [selected, setSelected] = useState<PendingCaregiver | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const q = useQuery({
     queryKey: ["ops-caregivers", full],
     queryFn: () => api<PendingCaregiver[]>("ops/caregivers/pending", { query: { limit: full ? 100 : 4 } }),
   });
+
+  const selected = q.data?.find((c) => c.id === selectedId) ?? null;
 
   return (
     <Card className="p-0">
@@ -173,12 +294,12 @@ export function VettingQueue({ full = false }: { full?: boolean }) {
               ))}
             </div>
             {c.ready_to_approve ? (
-              <Button size="sm" onClick={() => setSelected(c)}>
+              <Button size="sm" onClick={() => setSelectedId(c.id)}>
                 Review &amp; approve
               </Button>
             ) : (
-              <button onClick={() => setSelected(c)} className="max-w-[170px] text-right text-[13px] text-muted-foreground underline-offset-2 hover:underline">
-                {c.blockers[0] ?? "Review"}
+              <button onClick={() => setSelectedId(c.id)} className="max-w-[170px] text-right text-[13px] text-muted-foreground underline-offset-2 hover:underline">
+                {c.blockers[0] ? friendlyBlocker(c.blockers[0]) : "Review"}
               </button>
             )}
           </li>
@@ -186,7 +307,7 @@ export function VettingQueue({ full = false }: { full?: boolean }) {
         {q.isSuccess && q.data.length === 0 && <li className="p-6 text-center text-body text-muted-foreground">No applicants waiting.</li>}
         {q.isError && <li className="p-6 text-center text-body text-crisis-ink">{q.error.message}</li>}
       </ul>
-      <DecisionDialog key={selected?.id} c={selected} onClose={() => setSelected(null)} />
+      <DecisionDialog key={selected?.id} c={selected} onClose={() => setSelectedId(null)} />
     </Card>
   );
 }
