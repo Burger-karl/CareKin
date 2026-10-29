@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { LogOut } from "lucide-react";
+import { LogOut, MapPin, ShieldCheck, SlidersHorizontal, UserRound } from "lucide-react";
 import { toast } from "sonner";
+import { PlaceDialog } from "@/components/location/place-dialog";
 import { PageHeader } from "@/components/shell/app-shell";
 import { useSession } from "@/components/session/session";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,8 @@ const CONSENTS: { type: ConsentType; title: string; body: string; required?: boo
 ];
 
 export function SettingsView() {
-  const { me, signOut } = useSession();
+  const { me, patient, signOut } = useSession();
+  const [placeOpen, setPlaceOpen] = useState(false);
   const qc = useQueryClient();
   const [name, setName] = useState(me.full_name);
   const [email, setEmail] = useState(me.email ?? "");
@@ -61,10 +63,15 @@ export function SettingsView() {
 
   return (
     <div>
-      <PageHeader title="Settings" subtitle="Your details and what you share" />
+      <PageHeader title="Settings" subtitle="Your details and what you share" icon={SlidersHorizontal} tone="slate" />
       <div className="mx-auto max-w-xl space-y-4 lg:mx-0">
         <Card>
-          <CardTitle className="mb-4">Your details</CardTitle>
+          <CardTitle className="mb-4 flex items-center gap-2.5">
+            <span className="flex size-9 items-center justify-center rounded-full bg-mint text-teal" aria-hidden>
+              <UserRound className="size-4" />
+            </span>
+            Your details
+          </CardTitle>
           <form
             className="space-y-4"
             noValidate
@@ -95,8 +102,34 @@ export function SettingsView() {
           </form>
         </Card>
 
-        <Card>
-          <CardTitle className="mb-1">What we collect &amp; why</CardTitle>
+        {patient && patient.access !== "family" && (
+          <Card>
+            <CardTitle className="mb-1 flex items-center gap-2.5">
+              <span className="flex size-9 items-center justify-center rounded-full bg-mint text-teal" aria-hidden>
+                <MapPin className="size-4" />
+              </span>
+              Home location
+            </CardTitle>
+            <p className="ck-meta mb-3">
+              {patient.home_location
+                ? `Saved: ${patient.home_location.latitude.toFixed(4)}, ${patient.home_location.longitude.toFixed(4)}.`
+                : "Not set yet."}{" "}
+              Caregivers and facilities near you are found from here.
+            </p>
+            <Button variant="secondary" onClick={() => setPlaceOpen(true)}>
+              {patient.home_location ? "Change location" : "Set location"}
+            </Button>
+            <PlaceDialog open={placeOpen} onOpenChange={setPlaceOpen} patientId={patient.id} />
+          </Card>
+        )}
+
+        <Card tone="soft">
+          <CardTitle className="mb-1 flex items-center gap-2.5">
+            <span className="flex size-9 items-center justify-center rounded-full bg-mint text-teal" aria-hidden>
+              <ShieldCheck className="size-4" />
+            </span>
+            What we collect &amp; why
+          </CardTitle>
           <p className="ck-meta mb-4">
             Consent is recorded under the Nigeria Data Protection Act. Change it any time.{" "}
             <Link href="/privacy" className="font-semibold text-teal underline">

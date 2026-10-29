@@ -129,14 +129,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const showCrisis = me.role === "patient" || me.role === "guardian";
 
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[222px_1fr]">
+    <div className="min-h-dvh bg-[radial-gradient(900px_420px_at_100%_-8%,#DCEFEC_0%,transparent_62%),radial-gradient(700px_380px_at_0%_105%,#E3F1EE_0%,transparent_60%)] lg:grid lg:grid-cols-[250px_1fr]">
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-dvh flex-col border-r-[1.5px] border-line bg-white lg:flex">
-        <div className="px-6 pb-6 pt-7">
-          <Logo href="/dashboard" />
-          <p className="mt-1 text-[13px] text-muted-foreground">Care marketplace &amp; safety layer</p>
+      <aside className="sticky top-0 hidden h-dvh flex-col overflow-hidden bg-gradient-to-b from-[#0B7468] via-[#085E54] to-[#053F38] text-white shadow-xl shadow-teal/20 lg:flex">
+        <div aria-hidden className="absolute -right-16 top-24 size-48 rounded-full bg-white/5" />
+        <div aria-hidden className="absolute -bottom-12 -left-12 size-44 rounded-full bg-crisis/15" />
+        <div className="relative px-5 pb-5 pt-6">
+          <div className="w-fit rounded-2xl bg-white px-3.5 py-2 shadow-lg shadow-black/20">
+            <Logo href="/dashboard" />
+          </div>
+          <p className="mt-3 text-[12px] uppercase tracking-widest text-white/55">Carer and patient, together</p>
         </div>
-        <nav aria-label="Main" className="flex flex-1 flex-col gap-1 px-3">
+        <nav aria-label="Main" className="relative flex flex-1 flex-col gap-1.5 px-3">
           {items.map(({ href, label, desktopLabel, icon: Icon }) => {
             const active = isActive(pathname, href);
             return (
@@ -145,21 +149,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] font-medium text-foreground/80 transition-colors hover:bg-mint-soft",
-                  active && "bg-mint font-semibold text-teal hover:bg-mint",
+                  "group flex items-center gap-3 rounded-xl px-3.5 py-3 text-[15px] font-medium text-white/80 transition-all duration-200 hover:translate-x-1 hover:bg-white/10 hover:text-white",
+                  active && "bg-white font-semibold text-teal shadow-lg shadow-black/15 hover:translate-x-0 hover:bg-white hover:text-teal",
                 )}
               >
-                <Icon className="size-5" />
+                <Icon className="size-5 transition-transform duration-200 group-hover:scale-110" />
                 {desktopLabel ?? label}
               </Link>
             );
           })}
         </nav>
         {showCrisis && (
-          <div className="border-t-[1.5px] border-line p-3">
+          <div className="relative p-4">
             <Link
               href="/crisis"
-              className="flex items-center gap-3 rounded-lg px-3 py-2.5 font-semibold text-crisis-ink hover:bg-crisis-soft"
+              className="flex items-center justify-center gap-2 rounded-xl bg-crisis px-3 py-3 font-semibold text-white shadow-lg shadow-black/25 transition hover:brightness-110 motion-safe:animate-halo"
             >
               <Zap className="size-5" /> Crisis mode
             </Link>
@@ -169,26 +173,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-h-dvh flex-col pb-20 lg:pb-0">
         {/* Mobile header */}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b-[1.5px] border-line bg-white px-4 lg:hidden">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b-[1.5px] border-line bg-white/85 px-4 backdrop-blur-md lg:hidden">
           <Logo href="/dashboard" />
           <UserMenu />
         </header>
-        {/* Desktop user chip */}
-        <div className="pointer-events-none absolute right-8 top-6 z-30 hidden lg:block">
-          <div className="pointer-events-auto">
+        {/* Desktop top bar */}
+        <div className="sticky top-0 z-30 hidden items-center justify-end px-8 py-3 backdrop-blur-sm lg:flex">
+          <div className="rounded-full border-[1.5px] border-line bg-white/90 py-1 pl-4 pr-1 shadow-sm">
             <UserMenu />
           </div>
         </div>
 
-        <main id="main" className="mx-auto w-full max-w-[1100px] flex-1 px-4 py-5 lg:px-8 lg:py-8">
-          {children}
+        <main id="main" className="mx-auto w-full max-w-[1100px] flex-1 px-4 py-5 lg:px-8 lg:pb-8 lg:pt-2">
+          <div key={pathname} className="animate-in fade-in-0 duration-300">
+            {children}
+          </div>
         </main>
       </div>
 
       {/* Mobile tab bar */}
       <nav
         aria-label="Main"
-        className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t-[1.5px] border-line bg-white lg:hidden"
+        className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t-[1.5px] border-line bg-white/90 backdrop-blur-md lg:hidden"
       >
         <ul className="mx-auto flex max-w-lg items-stretch justify-around">
           {items
@@ -201,11 +207,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     href={href}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex h-16 flex-col items-center justify-center gap-1 text-[13px] font-medium text-muted-foreground",
+                      "flex h-16 flex-col items-center justify-center gap-0.5 text-[12px] font-medium text-muted-foreground transition-colors",
                       active && "font-bold text-teal",
                     )}
                   >
-                    <Icon className="size-6" />
+                    <span
+                      className={cn(
+                        "flex h-7 w-12 items-center justify-center rounded-full transition-all duration-300",
+                        active && "bg-mint",
+                      )}
+                    >
+                      <Icon className={cn("size-5 transition-transform", active && "scale-110")} />
+                    </span>
                     {label}
                   </Link>
                 </li>
@@ -217,23 +230,50 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Page heading used inside the shell. */
+const BANNER_TONES = {
+  teal: "from-[#0F8577] via-[#0C7367] to-[#075248] shadow-teal/25",
+  cyan: "from-[#1491A8] via-[#0F7A8F] to-[#0A4E5E] shadow-[#0F7A8F]/25",
+  blue: "from-[#3466B8] via-[#2B4C84] to-[#1B3358] shadow-[#2B4C84]/25",
+  coral: "from-[#E0484F] via-[#C33840] to-[#8F2229] shadow-crisis/25",
+  green: "from-[#26A065] via-[#1E7A3C] to-[#12552A] shadow-[#1E7A3C]/25",
+  slate: "from-[#4A6672] via-[#35505B] to-[#1E3038] shadow-[#35505B]/25",
+} as const;
+
+/** Page heading used inside the shell: a coloured banner with an icon, title and an optional action. */
 export function PageHeader({
   title,
   subtitle,
   action,
+  icon: Icon,
+  tone = "teal",
 }: {
   title: string;
   subtitle?: string;
   action?: React.ReactNode;
+  icon?: LucideIcon;
+  tone?: keyof typeof BANNER_TONES;
 }) {
   return (
-    <div className="mb-5 flex items-start justify-between gap-3 lg:pr-56">
-      <div>
-        <h1 className="text-[28px] font-bold leading-9 tracking-tight lg:text-title">{title}</h1>
-        {subtitle && <p className="mt-0.5 text-body text-muted-foreground">{subtitle}</p>}
+    <div
+      className={cn(
+        "ck-banner-in relative mb-6 flex items-center justify-between gap-4 overflow-hidden rounded-2xl bg-gradient-to-br p-5 text-white shadow-lg md:p-6",
+        BANNER_TONES[tone],
+      )}
+    >
+      <div aria-hidden className="absolute -right-10 -top-14 size-48 rounded-full bg-white/10" />
+      <div aria-hidden className="absolute -bottom-16 right-28 size-36 rounded-full bg-white/[0.07]" />
+      <div className="relative flex min-w-0 items-center gap-4">
+        {Icon && (
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 backdrop-blur md:size-14">
+            <Icon className="size-6 md:size-7" aria-hidden />
+          </span>
+        )}
+        <div className="min-w-0">
+          <h1 className="text-[24px] font-bold leading-8 tracking-tight md:text-[30px] md:leading-9">{title}</h1>
+          {subtitle && <p className="mt-0.5 text-[14px] text-white/80 md:text-[15px]">{subtitle}</p>}
+        </div>
       </div>
-      {action}
+      {action && <div className="relative shrink-0">{action}</div>}
     </div>
   );
 }

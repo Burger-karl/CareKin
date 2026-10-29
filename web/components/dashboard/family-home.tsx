@@ -132,7 +132,7 @@ export function FamilyHome() {
       <h1 className="mb-5 text-[30px] font-bold leading-9">{name}&apos;s week</h1>
 
       <div className="space-y-5">
-        <Card className="border-[#BEDCD8] bg-mint">
+        <Card tone="mint" delay={0} lift>
           <div className="flex items-center justify-between">
             <CardTitle className="text-teal">Care funded this month</CardTitle>
             <span className="ck-meta">via Paystack or Stripe</span>
@@ -168,7 +168,7 @@ export function FamilyHome() {
           </dl>
         </Card>
 
-        <Card>
+        <Card delay={120}>
           <CardTitle className="mb-3">Updates</CardTitle>
           {loading ? (
             <Skeleton className="h-24" />
@@ -186,7 +186,7 @@ export function FamilyHome() {
           )}
         </Card>
 
-        <Card>
+        <Card tone="blue" delay={240}>
           <CardTitle className="mb-2">What {name} shares with you</CardTitle>
           <ul className="divide-y divide-line">
             <ShareRow label="Shift check-ins & notes" on />

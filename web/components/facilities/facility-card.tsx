@@ -59,7 +59,7 @@ export function FacilityCardCompact({ r }: { r: FacilityResult }) {
   const km = formatDistanceKm(r.distance_km);
   const tags = serviceTags(r).filter((t) => t !== "24hr Emergency");
   return (
-    <article className="ck-card p-4">
+    <article className="ck-card border-l-[5px] border-l-primary p-4 transition duration-300 hover:-translate-y-0.5 hover:shadow-md hover:shadow-teal/10">
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-[17px] font-bold leading-snug">{r.facility.name}</h3>
         {is24hEmergency(r) && <Badge variant="crisis">24hr</Badge>}
@@ -100,7 +100,12 @@ export function FacilityCardFull({
   const tags = serviceTags(r);
   const phone = r.facility.phone_number;
   return (
-    <article className="ck-card p-5">
+    <article
+      className={cn(
+        "ck-card border-l-[5px] p-5 transition duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-teal/10",
+        is24hEmergency(r) ? "border-l-crisis" : "border-l-primary",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-[19px] font-bold leading-snug">{r.facility.name}</h3>
         {is24hEmergency(r) && <Badge variant="crisis">24hr</Badge>}

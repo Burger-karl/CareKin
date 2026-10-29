@@ -230,11 +230,20 @@ export interface CaregiverMatch {
   score: number;
 }
 
+export interface UnavailableCaregiver {
+  caregiver_id: string;
+  full_name: string;
+  tier: CaregiverTier;
+  reason: "busy" | "outside_hours";
+}
+
 export interface MatchResult {
   patient_id: string;
   guardian_approval_required: boolean;
   min_tier_applied: CaregiverTier | null;
   results: CaregiverMatch[];
+  /** Absent on a backend that predates the field. */
+  unavailable?: UnavailableCaregiver[];
 }
 
 export interface CaregiverPublic {
@@ -253,6 +262,8 @@ export interface CaregiverPublic {
 
 export interface CaregiverSelf extends CaregiverPublic {
   user_id: string;
+  base_latitude?: number | null;
+  base_longitude?: number | null;
   status: string;
   approved_at: string | null;
 }
