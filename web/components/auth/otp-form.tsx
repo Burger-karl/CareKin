@@ -9,20 +9,27 @@ import { ApiError, authApi, errorMessage } from "@/lib/api/client";
 interface Sent {
   expires_in: number;
   resend_after: number;
+  debug_code?: string | null;
 }
 
-/** Six-digit code entry with a resend countdown. `onVerify` receives the typed code. */
+/**
+ * Six-digit code entry with a resend countdown. `onVerify` receives the typed code.
+ * `debugCode` is only sent by a backend running with mock SMS (development); it never exists in production.
+ */
 export function OtpForm({
   phone,
   resendAfter,
+  debugCode,
   onVerify,
   submitLabel = "Verify",
 }: {
   phone: string;
   resendAfter: number;
+  debugCode?: string | null;
   onVerify: (code: string) => Promise<void>;
   submitLabel?: string;
 }) {
+  const [testCode, setTestCode] = useState(debugCode ?? null);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -56,6 +63,7 @@ export function OtpForm({
     try {
       const r = await authApi<Sent>("otp/send", { phone });
       setWait(r.resend_after);
+      setTestCode(r.debug_code ?? null);
     } catch (err) {
       if (err instanceof ApiError && err.retryAfter) setWait(err.retryAfter);
       setError(errorMessage(err));
@@ -81,6 +89,16 @@ export function OtpForm({
           className="text-center text-xl tracking-[0.4em]"
         />
       </Field>
+      {testCode && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border-[1.5px] border-dashed border-amber bg-[#FFF8E6] px-4 py-3 text-sm">
+          <span>
+            Test mode code: <strong className="tracking-widest">{testCode}</strong>
+          </span>
+          <button type="button" onClick={() => setCode(testCode)} className="font-semibold text-teal underline">
+            Use it
+          </button>
+        </div>
+      )}
       <Button type="submit" size="lg" className="w-full" loading={busy}>
         {submitLabel}
       </Button>

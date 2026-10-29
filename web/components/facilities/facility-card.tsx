@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { Navigation, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { FacilityMapDialog } from "@/components/facilities/facility-map";
 import { Button } from "@/components/ui/button";
-import { cn, daysSince, formatDate, formatDistanceKm, mapsDirectionsUrl, telHref } from "@/lib/utils";
+import { cn, daysSince, formatDate, formatDistanceKm, telHref } from "@/lib/utils";
 import type { FacilityResult } from "@/lib/types";
 
 export const STALE_AFTER_DAYS = 90;
@@ -51,15 +53,9 @@ function VerifiedLine({ at, className }: { at: string | null; className?: string
   );
 }
 
-function directionsHref(r: FacilityResult) {
-  const { latitude, longitude, name, address } = r.facility;
-  return latitude != null && longitude != null
-    ? mapsDirectionsUrl(latitude, longitude)
-    : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${name}, ${address}`)}`;
-}
-
 /** Compact card for the dashboard list. */
 export function FacilityCardCompact({ r }: { r: FacilityResult }) {
+  const [map, setMap] = useState(false);
   const km = formatDistanceKm(r.distance_km);
   const tags = serviceTags(r).filter((t) => t !== "24hr Emergency");
   return (
@@ -80,12 +76,11 @@ export function FacilityCardCompact({ r }: { r: FacilityResult }) {
       )}
       <div className="mt-3 flex items-center justify-between gap-3">
         <VerifiedLine at={r.facility.last_verified_at} />
-        <Button asChild size="default">
-          <a href={directionsHref(r)} target="_blank" rel="noopener noreferrer">
-            Get Directions
-          </a>
+        <Button size="default" onClick={() => setMap(true)}>
+          Get Directions
         </Button>
       </div>
+      <FacilityMapDialog facility={map ? r.facility : null} onClose={() => setMap(false)} />
     </article>
   );
 }
@@ -100,6 +95,7 @@ export function FacilityCardFull({
   onShare?: () => void;
   canShare: boolean;
 }) {
+  const [map, setMap] = useState(false);
   const km = formatDistanceKm(r.distance_km);
   const tags = serviceTags(r);
   const phone = r.facility.phone_number;
@@ -131,20 +127,20 @@ export function FacilityCardFull({
             Call
           </a>
         )}
-        <a
-          href={directionsHref(r)}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          type="button"
+          onClick={() => setMap(true)}
           className="inline-flex items-center gap-1.5 py-2 font-semibold text-teal hover:underline"
         >
-          <Navigation className="size-4" aria-hidden /> Directions
-        </a>
+          <Navigation className="size-4" aria-hidden /> Map &amp; directions
+        </button>
         {canShare && (
           <Button className="ml-auto" onClick={onShare}>
             Share Passport
           </Button>
         )}
       </div>
+      <FacilityMapDialog facility={map ? r.facility : null} onClose={() => setMap(false)} />
     </article>
   );
 }

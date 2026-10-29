@@ -16,6 +16,7 @@ type Step = "details" | "who" | "verify";
 
 interface Registered {
   resend_after: number;
+  debug_code?: string | null;
 }
 
 function maskPhone(phone: string) {
@@ -190,7 +191,7 @@ export function RegisterFlow() {
             <h1 className="text-title font-bold leading-tight">Verify your phone</h1>
             <p className="mt-2 text-muted-foreground">Phone {maskPhone(phone)}</p>
           </div>
-          <OtpForm phone={phone} resendAfter={reg.resend_after} onVerify={verify} submitLabel="Verify & continue" />
+          <OtpForm phone={phone} resendAfter={reg.resend_after} debugCode={reg.debug_code} onVerify={verify} submitLabel="Verify & continue" />
         </>
       )}
     </div>
