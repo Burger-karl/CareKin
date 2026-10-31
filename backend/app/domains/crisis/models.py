@@ -157,3 +157,27 @@ class CrisisAlert(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     @property
     def recipient_type(self) -> str:
         return "guardian" if self.guardian_id else "emergency_contact"
+
+
+class CrisisDeviceKey(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """Lets one device start a crisis for one patient without signing in.
+
+    Created while signed in ("turn on one-tap crisis on this phone"). The raw key is shown
+    once and kept by the device; only its SHA-256 is stored. It can do nothing but start
+    a crisis, see that crisis and cancel it as a false alarm, so a stolen key leaks no data.
+    It stops working when revoked or when its owner loses access to the patient.
+    """
+
+    __tablename__ = "crisis_device_keys"
+
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("patients.id", ondelete="CASCADE"), index=True
+    )
+    # The patient or guardian who turned it on; presses are made in their name.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    label: Mapped[str] = mapped_column(String(80))
+    last_used_at: Mapped[datetime | None]
+    revoked_at: Mapped[datetime | None]

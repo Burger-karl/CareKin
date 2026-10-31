@@ -18,12 +18,20 @@ async function post(path: string, body: unknown, req: NextRequest) {
   const headers: Record<string, string> = { "content-type": "application/json" };
   const fwd = req.headers.get("x-forwarded-for");
   if (fwd) headers["x-forwarded-for"] = fwd;
-  return fetch(`${API_URL}/auth/${path}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body ?? {}),
-    cache: "no-store",
-  });
+  const send = () =>
+    fetch(`${API_URL}/auth/${path}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body ?? {}),
+      cache: "no-store",
+    });
+  try {
+    return await send();
+  } catch {
+    // A sleeping host (Render's free tier) often drops the first connection while it wakes. Try once more.
+    await new Promise((r) => setTimeout(r, 4000));
+    return await send();
+  }
 }
 
 export async function POST(req: NextRequest, { params }: { params: { action: string[] } }) {
@@ -67,7 +75,9 @@ export async function POST(req: NextRequest, { params }: { params: { action: str
     const res = NextResponse.json({ user });
     setSessionCookies(res, tokens);
     return res;
-  } catch {
+  } catch (e) {
+    // Say which address failed, so a wrong or missing API_URL is easy to spot in the terminal running `npm run dev`.
+    console.error(`[auth] could not reach ${API_URL}:`, e instanceof Error ? (e.cause ?? e.message) : e);
     return errorResponse(503, "api_unreachable", "We can't reach CareKin right now. Please try again.");
   }
 }

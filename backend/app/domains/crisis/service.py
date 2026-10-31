@@ -19,7 +19,9 @@ name, never their condition, because SMS previews show on lock screens.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
+import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -28,14 +30,14 @@ from zoneinfo import ZoneInfo
 
 from fastapi import Request
 from geoalchemy2 import WKTElement
-from sqlalchemy import select, true
+from sqlalchemy import func, select, true, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
 from app.core.audit import write_audit
-from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError, UnauthorizedError
 from app.core.permissions import UserRole
 from app.core.phone import mask_phone
 from app.domains.auth.models import ConsentType, User
@@ -45,11 +47,18 @@ from app.domains.crisis.facilities import NearbyResult
 from app.domains.crisis.models import (
     AlertStatus,
     CrisisAlert,
+    CrisisDeviceKey,
     CrisisEvent,
     CrisisStatus,
     LocationSource,
 )
-from app.domains.crisis.schemas import CrisisResolveIn, CrisisTriggerIn
+from app.domains.crisis.schemas import (
+    AnonymousPressIn,
+    CrisisResolveIn,
+    CrisisTriggerIn,
+    DeviceKeyCreateIn,
+    DevicePressIn,
+)
 from app.domains.passport.models import PassportEntry, PassportEntryType
 from app.domains.patients.models import AlertChannel, EmergencyContact, Guardian, Patient
 from app.domains.patients.service import get_access
@@ -149,7 +158,12 @@ def _accept_device_time(device_time: datetime | None, now: datetime) -> datetime
 
 
 async def trigger_crisis(
-    db: AsyncSession, user: User, data: CrisisTriggerIn, request: Request | None = None
+    db: AsyncSession,
+    user: User,
+    data: CrisisTriggerIn,
+    request: Request | None = None,
+    *,
+    device_key_id: uuid.UUID | None = None,
 ) -> TriggerResult:
     settings = get_settings()
     patient = await patient_for(db, user, data.patient_id, "trigger")
@@ -216,7 +230,11 @@ async def trigger_crisis(
         entity_type="crisis_event",
         entity_id=event_id,
         request=request,
-        metadata={"location_source": event.location_source.value, "alerts_queued": len(alerts)},
+        metadata={
+            "location_source": event.location_source.value,
+            "alerts_queued": len(alerts),
+            **({"device_key_id": str(device_key_id)} if device_key_id else {}),
+        },
     )
     try:
         await db.commit()
@@ -591,3 +609,225 @@ def facilities_out(event: CrisisEvent, nearby: NearbyResult) -> dict[str, Any]:
         "facilities_available": nearby.available,
         "facilities": nearby.facilities,
     }
+
+
+# ------------------------------------------------------------------ device keys
+# A key on a device the patient or a guardian set up lets that device start a crisis
+# without signing in: no login or code in an emergency. Only its SHA-256 is stored.
+DEVICE_KEY_PREFIX = "ckd_"
+MAX_DEVICE_KEYS_PER_PATIENT = 10
+
+
+def hash_device_key(raw: str) -> str:
+    # The key is 256 random bits, so a plain hash is enough: there is nothing to guess.
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _invalid_key() -> UnauthorizedError:
+    return UnauthorizedError(
+        "This device can no longer send crisis alerts. Sign in to turn it on again.",
+        code="crisis_key_invalid",
+    )
+
+
+async def create_device_key(
+    db: AsyncSession, user: User, data: DeviceKeyCreateIn, request: Request | None = None
+) -> tuple[CrisisDeviceKey, str]:
+    """Turn on one-tap crisis on a device. Returns the row and the raw key (shown once)."""
+    await patient_for(db, user, data.patient_id, "trigger")
+    active = await db.scalar(
+        select(func.count())
+        .select_from(CrisisDeviceKey)
+        .where(CrisisDeviceKey.patient_id == data.patient_id, CrisisDeviceKey.revoked_at.is_(None))
+    )
+    if (active or 0) >= MAX_DEVICE_KEYS_PER_PATIENT:
+        raise ConflictError(
+            "Too many devices can send crisis alerts for this patient. Remove one in settings.",
+            code="too_many_device_keys",
+        )
+    raw = DEVICE_KEY_PREFIX + secrets.token_urlsafe(32)
+    key = CrisisDeviceKey(
+        patient_id=data.patient_id,
+        user_id=user.id,
+        key_hash=hash_device_key(raw),
+        label=data.label.strip(),
+    )
+    db.add(key)
+    write_audit(
+        db,
+        action="crisis.device_key.create",
+        actor_id=user.id,
+        entity_type="crisis_device_key",
+        entity_id=key.id,
+        request=request,
+        metadata={"patient_id": str(data.patient_id), "label": key.label},
+    )
+    await db.commit()
+    await db.refresh(key)
+    return key, raw
+
+
+async def list_device_keys(
+    db: AsyncSession, user: User, patient_id: uuid.UUID
+) -> list[CrisisDeviceKey]:
+    await patient_for(db, user, patient_id, "trigger")
+    return list(
+        await db.scalars(
+            select(CrisisDeviceKey)
+            .where(CrisisDeviceKey.patient_id == patient_id, CrisisDeviceKey.revoked_at.is_(None))
+            .order_by(CrisisDeviceKey.created_at.desc())
+        )
+    )
+
+
+def device_key_out(key: CrisisDeviceKey, viewer_id: uuid.UUID) -> dict[str, Any]:
+    return {
+        "id": key.id,
+        "patient_id": key.patient_id,
+        "label": key.label,
+        "created_at": key.created_at,
+        "last_used_at": key.last_used_at,
+        "added_by_you": key.user_id == viewer_id,
+    }
+
+
+async def revoke_device_key(
+    db: AsyncSession, user: User, key_id: uuid.UUID, request: Request | None = None
+) -> None:
+    """The patient or any guardian may switch off any device for that patient."""
+    key = await db.get(CrisisDeviceKey, key_id)
+    if key is None or key.revoked_at is not None:
+        raise NotFoundError("Device not found", code="device_key_not_found")
+    try:
+        await patient_for(db, user, key.patient_id, "trigger")
+    except ForbiddenError:
+        raise NotFoundError("Device not found", code="device_key_not_found") from None
+    key.revoked_at = _now()
+    write_audit(
+        db,
+        action="crisis.device_key.revoke",
+        actor_id=user.id,
+        entity_type="crisis_device_key",
+        entity_id=key.id,
+        request=request,
+    )
+    await db.commit()
+
+
+async def device_key_owner(db: AsyncSession, raw: str | None) -> tuple[CrisisDeviceKey, User]:
+    """The key and the person it acts for. 401 if unknown, revoked, or its owner is gone."""
+    if not raw or not raw.startswith(DEVICE_KEY_PREFIX) or len(raw) > 200:
+        raise _invalid_key()
+    key = await db.scalar(
+        select(CrisisDeviceKey).where(
+            CrisisDeviceKey.key_hash == hash_device_key(raw), CrisisDeviceKey.revoked_at.is_(None)
+        )
+    )
+    if key is None:
+        raise _invalid_key()
+    user = await db.get(User, key.user_id)
+    if user is None or not user.is_active:
+        raise _invalid_key()
+    return key, user
+
+
+async def _patient_first_name(db: AsyncSession, patient_id: uuid.UUID) -> str:
+    patient = await db.get(Patient, patient_id)
+    return _first_name(patient.full_name) if patient else "Your contact"
+
+
+async def trigger_with_device_key(
+    db: AsyncSession, raw: str | None, data: DevicePressIn, request: Request | None = None
+) -> tuple[TriggerResult, str]:
+    """Press from a set-up device: the same flow and dedupe, made in the owner's name."""
+    key, user = await device_key_owner(db, raw)
+    key_id, patient_id = key.id, key.patient_id
+    try:
+        result = await trigger_crisis(
+            db,
+            user,
+            CrisisTriggerIn(
+                patient_id=patient_id,
+                client_event_id=data.client_event_id,
+                location=data.location,
+                triggered_at=data.triggered_at,
+            ),
+            request,
+            device_key_id=key_id,
+        )
+    except (ForbiddenError, NotFoundError):
+        # The owner is no longer the patient's guardian: the key goes with that access.
+        raise _invalid_key() from None
+    await db.execute(
+        update(CrisisDeviceKey).where(CrisisDeviceKey.id == key_id).values(last_used_at=_now())
+    )
+    await db.commit()
+    return result, await _patient_first_name(db, patient_id)
+
+
+async def device_event(
+    db: AsyncSession, raw: str | None, event_id: uuid.UUID
+) -> tuple[CrisisEvent, str]:
+    """A crisis of this device's patient. Any other event looks missing."""
+    key, user = await device_key_owner(db, raw)
+    event = await load_event(db, event_id)
+    if event.patient_id != key.patient_id:
+        raise NotFoundError("Crisis event not found", code="crisis_not_found")
+    try:
+        await patient_for(db, user, key.patient_id, "trigger")
+    except (ForbiddenError, NotFoundError):
+        raise _invalid_key() from None
+    return event, await _patient_first_name(db, key.patient_id)
+
+
+async def cancel_device_event(
+    db: AsyncSession, raw: str | None, event_id: uuid.UUID, request: Request | None = None
+) -> None:
+    """Pressed by mistake: close it as a false alarm. Anything more needs a signed-in person."""
+    _, user = await device_key_owner(db, raw)
+    await device_event(db, raw, event_id)
+    await resolve_crisis(db, user, event_id, CrisisResolveIn(false_alarm=True), request)
+
+
+async def forget_device_key(
+    db: AsyncSession, raw: str | None, request: Request | None = None
+) -> None:
+    """The device switches its own key off ("Forget this device")."""
+    key, user = await device_key_owner(db, raw)
+    key.revoked_at = _now()
+    write_audit(
+        db,
+        action="crisis.device_key.revoke",
+        actor_id=user.id,
+        entity_type="crisis_device_key",
+        entity_id=key.id,
+        request=request,
+        metadata={"by": "device"},
+    )
+    await db.commit()
+
+
+async def log_anonymous_press(
+    db: AsyncSession, data: AnonymousPressIn, request: Request | None = None
+) -> None:
+    """A press on a device with no key. Nobody is alerted, since anyone could type anyone's
+    number, but ops can see that someone needed help and roughly where."""
+    loc = data.location
+    write_audit(
+        db,
+        action="crisis.anonymous_press",
+        actor_id=None,
+        entity_type="crisis",
+        request=request,
+        metadata=(
+            {
+                # About 100 m: enough to see the area, not a doorstep.
+                "latitude": round(loc.latitude, 3),
+                "longitude": round(loc.longitude, 3),
+                "accuracy_m": loc.accuracy_m,
+            }
+            if loc
+            else {"location": None}
+        ),
+    )
+    await db.commit()
