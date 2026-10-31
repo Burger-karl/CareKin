@@ -36,7 +36,7 @@ function elapsed(since: string, now: number) {
   return `${m} min ${s % 60} s`;
 }
 
-function alertLabel(a: CrisisAlert): { text: string; tone: "ok" | "wait" | "bad" } {
+export function alertLabel(a: CrisisAlert): { text: string; tone: "ok" | "wait" | "bad" } {
   const via = a.channel === "sms" ? " · SMS" : a.channel === "whatsapp" ? " · WhatsApp" : "";
   const map: Record<AlertStatus, { text: string; tone: "ok" | "wait" | "bad" }> = {
     queued: { text: "Sending…", tone: "wait" },
@@ -48,7 +48,7 @@ function alertLabel(a: CrisisAlert): { text: string; tone: "ok" | "wait" | "bad"
   return map[a.status];
 }
 
-function FacilityCard({ f, primary }: { f: CrisisFacility; primary?: boolean }) {
+export function FacilityCard({ f, primary }: { f: CrisisFacility; primary?: boolean }) {
   const km = (f.distance_m / 1000).toFixed(1);
   const tags = f.crisis_services.map((s) => serviceLabel[s] ?? s);
   const call = f.call_number ?? f.phone;
@@ -94,7 +94,7 @@ function FacilityCard({ f, primary }: { f: CrisisFacility; primary?: boolean }) 
   );
 }
 
-function SafetyNote({ number }: { number: string }) {
+export function SafetyNote({ number }: { number: string }) {
   return (
     <div className="rounded-xl bg-crisis-soft p-5">
       <p className="font-bold text-crisis-ink">CareKin is not an emergency service.</p>

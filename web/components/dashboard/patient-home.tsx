@@ -7,6 +7,7 @@ import { Download, FileText, MapPin, MessageCircle, Plus, Share2, Users, Zap } f
 import { toast } from "sonner";
 import { Avatar, toneFor } from "@/components/brand";
 import { CrisisButton } from "@/components/crisis/crisis-button";
+import { DeviceSetupCard } from "@/components/crisis/device-setup";
 import { FamilyDialog } from "@/components/dashboard/family-dialog";
 import { FacilityCardCompact } from "@/components/facilities/facility-card";
 import { useSession } from "@/components/session/session";
@@ -250,6 +251,8 @@ export function PatientHome() {
           </nav>
         </div>
       </div>
+
+      <DeviceSetupCard />
 
       <div className="flex flex-col gap-5 lg:grid lg:grid-cols-3 lg:items-start">
         {/* Column 1 */}

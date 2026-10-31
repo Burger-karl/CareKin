@@ -177,7 +177,16 @@ export function SetupFlow() {
         await api(`patients/${id}/emergency-contacts`, {
           body: {
             name: form.contact_name.trim(),
-            phone: phone.startsWith("+") ? phone : phone.replace(/^0/, "+234"),
+            // Nigerian numbers typed any common way: 0803..., 234803..., 803... or +234803...
+            phone: phone.startsWith("+")
+              ? phone
+              : phone.startsWith("234")
+                ? `+${phone}`
+                : phone.startsWith("0")
+                  ? phone.replace(/^0/, "+234")
+                  : /^\d{10}$/.test(phone)
+                    ? `+234${phone}`
+                    : phone,
             relationship: form.contact_relationship.trim() || "contact",
             priority: 1,
           },

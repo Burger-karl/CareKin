@@ -1,7 +1,9 @@
 import Image from "next/image";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { BadgeCheck, Check, FileText, HeartHandshake, MapPin, Phone, ShieldCheck, Zap } from "lucide-react";
 import { Logo } from "@/components/brand";
+import { LandingCrisis } from "@/components/crisis/landing-crisis";
 import { HeroVisual } from "@/components/landing/hero-visual";
 import { Reveal } from "@/components/landing/reveal";
 import { Button } from "@/components/ui/button";
@@ -41,6 +43,11 @@ const AUDIENCE = [
 ];
 
 export default function Landing() {
+  // Set when someone turned on one-tap crisis for this phone while signed in (httpOnly).
+  const jar = cookies();
+  const enrolled = jar.has("ck_crisis");
+  const crisisName = enrolled ? (jar.get("ck_crisis_name")?.value ?? null) : null;
+
   return (
     <div className="min-h-dvh bg-background">
       <header className="border-b-[1.5px] border-line bg-white">
@@ -67,6 +74,25 @@ export default function Landing() {
       </header>
 
       <main>
+        <section aria-labelledby="crisis-heading" className="border-b-[1.5px] border-[#F3B8BB] bg-gradient-to-b from-[#FDECEC] to-[#FFF7F7]">
+          <div className="mx-auto grid max-w-6xl items-center gap-6 px-4 py-8 md:grid-cols-[1fr_auto] md:py-10">
+            <div className="text-center md:text-left">
+              <p className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-[13px] font-semibold text-crisis-ink ring-1 ring-[#F3B8BB]">
+                <span className="size-2 animate-pulse rounded-full bg-crisis" aria-hidden /> Emergency help, no sign-in
+              </p>
+              <h2 id="crisis-heading" className="mt-3 text-[26px] font-bold leading-tight md:text-[32px]">
+                In a sickle cell crisis?
+              </h2>
+              <p className="mx-auto mt-2 max-w-lg text-[16px] text-foreground/80 md:mx-0">
+                {enrolled
+                  ? "This phone is set up. Hold the button to alert family and caregiver with your location."
+                  : "Press for the emergency number and the nearest hospital that treats sickle cell. Patients who set up this phone can alert their family with one press, without signing in."}
+              </p>
+            </div>
+            <LandingCrisis enrolled={enrolled} firstName={crisisName} />
+          </div>
+        </section>
+
         <section className="relative overflow-hidden bg-gradient-to-b from-mint-soft via-background to-background">
           <div
             aria-hidden

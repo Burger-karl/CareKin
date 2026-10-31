@@ -6,8 +6,16 @@ this domain gives treatment advice: it routes people to contacts and facilities.
 
 import uuid
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 from app.config import get_settings
 from app.domains.crisis.models import AlertStatus, CrisisStatus, LocationSource
@@ -166,3 +174,59 @@ class CrisisAlertRetryOut(SafetyNotice):
     alerts: list[AlertOut]
     new_recipients: int = Field(description="Contacts added since the crisis started, now queued.")
     queued: int = Field(description="Alerts that will be (re)sent now.")
+
+
+# ---------------------------------------------------------------- device keys
+class DeviceKeyCreateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    patient_id: uuid.UUID
+    label: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)] = (
+        Field(description="Shown in settings, e.g. 'Chrome on Android'.")
+    )
+
+
+class DeviceKeyOut(BaseModel):
+    id: uuid.UUID
+    patient_id: uuid.UUID
+    label: str
+    created_at: datetime
+    last_used_at: datetime | None
+    added_by_you: bool
+
+
+class DeviceKeyCreatedOut(DeviceKeyOut):
+    key: str = Field(
+        description="Shown once. The device keeps it and sends it as X-Crisis-Key. Never logged."
+    )
+
+
+class DevicePressIn(BaseModel):
+    """POST /crisis/device-press: the same as a signed-in press, minus the patient id."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    client_event_id: uuid.UUID
+    location: LocationIn | None = None
+    triggered_at: AwareDatetime | None = None
+
+
+class DevicePressOut(CrisisTriggerOut):
+    patient_first_name: str
+
+
+class DeviceEventOut(CrisisEventOut):
+    patient_first_name: str
+    nearby: FacilitiesOut
+
+
+class AnonymousPressIn(BaseModel):
+    """A press on a device with no key: nobody can be alerted, but it is logged for ops."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    location: LocationIn | None = None
+
+
+class AnonymousPressOut(SafetyNotice):
+    logged: bool

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LogOut, MapPin, ShieldCheck, SlidersHorizontal, UserRound } from "lucide-react";
 import { toast } from "sonner";
+import { CrisisDevicesCard } from "@/components/crisis/device-setup";
 import { PlaceDialog } from "@/components/location/place-dialog";
 import { PageHeader } from "@/components/shell/app-shell";
 import { useSession } from "@/components/session/session";
@@ -122,6 +123,8 @@ export function SettingsView() {
             <PlaceDialog open={placeOpen} onOpenChange={setPlaceOpen} patientId={patient.id} />
           </Card>
         )}
+
+        <CrisisDevicesCard />
 
         <Card tone="soft">
           <CardTitle className="mb-1 flex items-center gap-2.5">

@@ -59,3 +59,21 @@ export function refreshTokens(refreshToken: string): Promise<TokenOut | null> {
 export function errorResponse(status: number, code: string, message: string) {
   return NextResponse.json({ error: { code, message } }, { status });
 }
+
+// One-tap crisis: the key this device got when someone turned it on while signed in.
+// httpOnly so page scripts can't read it, and kept on sign-out so crisis still works
+// when nobody is signed in. Browsers cap cookie lifetime at 400 days.
+export const CRISIS_KEY_COOKIE = "ck_crisis";
+export const CRISIS_NAME_COOKIE = "ck_crisis_name";
+const CRISIS_MAX_AGE = 400 * 24 * 60 * 60;
+
+export function setCrisisKeyCookies(res: NextResponse, key: string, firstName: string) {
+  const base = { httpOnly: true, secure, sameSite: "lax" as const, path: "/", maxAge: CRISIS_MAX_AGE };
+  res.cookies.set(CRISIS_KEY_COOKIE, key, base);
+  res.cookies.set(CRISIS_NAME_COOKIE, firstName.slice(0, 40), base);
+}
+
+export function clearCrisisKeyCookies(res: NextResponse) {
+  res.cookies.set(CRISIS_KEY_COOKIE, "", { path: "/", maxAge: 0 });
+  res.cookies.set(CRISIS_NAME_COOKIE, "", { path: "/", maxAge: 0 });
+}

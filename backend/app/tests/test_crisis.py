@@ -672,12 +672,17 @@ async def test_unexpected_sms_errors_do_not_stop_other_alerts(api, family, monke
     assert mum_alert.last_error == "Unexpected error: RuntimeError"
 
 
-def test_celery_sweep_task_runs_eagerly(monkeypatch):
+def test_celery_sweep_task_runs_eagerly():
     from app.domains.crisis.tasks import sweep_alerts
     from app.worker import celery_app
 
-    monkeypatch.setattr(celery_app.conf, "task_always_eager", True)
-    result = sweep_alerts.delay().get(timeout=10)
+    # Set and restore by hand: Celery 5.6's settings object can't be monkeypatched back.
+    previous = celery_app.conf.task_always_eager
+    celery_app.conf.task_always_eager = True
+    try:
+        result = sweep_alerts.delay().get(timeout=10)
+    finally:
+        celery_app.conf.task_always_eager = previous
     assert result == {"sent": 0, "failed": 0, "skipped": 0}
 
 
