@@ -3,211 +3,253 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Download, FileText, MapPin, MessageCircle, Plus, Share2, Users, Zap } from "lucide-react";
+import { ArrowUpRight, Download, FileText, MapPin, Navigation, Plus, Share2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, toneFor } from "@/components/brand";
 import { CrisisButton } from "@/components/crisis/crisis-button";
 import { DeviceSetupCard } from "@/components/crisis/device-setup";
 import { FamilyDialog } from "@/components/dashboard/family-dialog";
-import { FacilityCardCompact } from "@/components/facilities/facility-card";
+import { is24hEmergency, serviceTags } from "@/components/facilities/facility-card";
+import { FacilityMapDialog } from "@/components/facilities/facility-map";
 import { useSession } from "@/components/session/session";
+import { DashTitle } from "@/components/shell/dash-frame";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, Tile } from "@/components/ui/card";
+import { Card, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   fetchFacilities,
   useBookings,
   useCareProfile,
   useCaregiver,
-  useCheckIns,
+  useContacts,
   useFamilyLinks,
   usePassport,
   useShares,
   useShifts,
 } from "@/lib/api/queries";
-import { downloadPassportPdf } from "@/lib/passport";
+import { STATUS_LABEL } from "@/lib/booking";
 import { useUserLocation } from "@/lib/location";
-import { cn, firstName, formatDate, formatLongDate, formatTime, greeting, humanize, splitList } from "@/lib/utils";
-import type { Booking, Shift } from "@/lib/types";
+import { downloadPassportPdf } from "@/lib/passport";
+import { cn, firstName, formatDate, formatDayMonth, formatDistanceKm, formatLongDate, formatMoney, formatTime, greeting, humanize, initials, splitList } from "@/lib/utils";
+import type { Booking, Facility } from "@/lib/types";
 
-const TIER_LABEL = { companion: "Companion", trained_carer: "Trained carer", licensed_nurse: "Licensed nurse" } as const;
+const OPEN = new Set(["requested", "pending_guardian", "accepted", "paid", "in_progress", "disputed"]);
+const ACTIVE = new Set(["accepted", "paid", "in_progress"]);
 
-const ACTIVITY_STYLE = {
-  checkin: { icon: MapPin, tone: "bg-mint text-teal" },
-  share: { icon: Share2, tone: "bg-[#E4ECF8] text-[#2B4C84]" },
-  crisis: { icon: Zap, tone: "bg-crisis-soft text-crisis" },
-  note: { icon: FileText, tone: "bg-amber-soft text-amber-ink" },
-} as const;
+// ------------------------------------------------------------------ stat card
+const BAR = { teal: "bg-primary", coral: "bg-crisis", amber: "bg-amber", blue: "bg-[#2B6CB0]" } as const;
 
-const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString();
-const when = (iso: string) => (isToday(iso) ? formatTime(iso) : formatDate(iso));
-
-function pickActive(bookings: Booking[], patientId: string) {
-  const mine = bookings.filter((b) => b.patient_id === patientId);
-  return (
-    mine.find((b) => b.status === "in_progress") ??
-    mine
-      .filter((b) => b.status === "paid" && new Date(b.ends_at) > new Date())
-      .sort((a, b) => +new Date(a.starts_at) - +new Date(b.starts_at))[0]
+function StatCard({
+  title,
+  badge,
+  value,
+  note,
+  progress,
+  color,
+  href,
+}: {
+  title: string;
+  badge: string;
+  value: React.ReactNode;
+  note: string;
+  progress?: number;
+  color: keyof typeof BAR;
+  href?: string;
+}) {
+  const body = (
+    <>
+      <div className="mb-4 flex items-start justify-between gap-2">
+        <h2 className="truncate text-base font-[600] text-slate-800">{title}</h2>
+        <span className="shrink-0 rounded bg-mint px-1.5 py-0.5 text-[10px] font-[600] leading-tight text-teal">{badge}</span>
+      </div>
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <p className="text-3xl font-medium text-slate-800">{value}</p>
+        <p className="truncate text-right text-sm text-slate-400">{note}</p>
+      </div>
+      <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-200" role="presentation">
+        <span className={cn("rounded-full transition-[width] duration-700", BAR[color])} style={{ width: `${Math.round((progress ?? 0) * 100)}%` }} />
+      </div>
+    </>
+  );
+  return href ? (
+    <Link href={href} className="ck-card block p-5">
+      {body}
+    </Link>
+  ) : (
+    <div className="ck-card p-5">{body}</div>
   );
 }
 
-function currentShift(shifts: Shift[] | undefined) {
-  if (!shifts) return undefined;
+// ------------------------------------------------------------------ crisis history chart
+function CrisisChart({ dates }: { dates: string[] }) {
+  const months = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
+      const count = dates.filter((iso) => {
+        const t = new Date(iso);
+        return t.getFullYear() === d.getFullYear() && t.getMonth() === d.getMonth();
+      }).length;
+      return { label: d.toLocaleString("en-GB", { month: "short" }), count, current: i === 11 };
+    });
+  }, [dates]);
+  const max = Math.max(1, ...months.map((m) => m.count));
+
   return (
-    shifts.find((s) => s.status === "in_progress") ??
-    shifts.find((s) => isToday(s.scheduled_start)) ??
-    shifts.find((s) => s.status === "scheduled")
+    <div>
+      <div className="flex h-48 items-end gap-2 sm:gap-3" role="img" aria-label={`Crises per month: ${months.map((m) => `${m.label} ${m.count}`).join(", ")}`}>
+        {months.map((m) => (
+          <div key={m.label} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5">
+            {m.count > 0 && <span className="text-xs font-medium text-slate-700">{m.count}</span>}
+            <span
+              className={cn("w-full max-w-9 rounded-t-md transition-[height] duration-700", m.count ? "bg-crisis/80" : "bg-slate-200")}
+              style={{ height: m.count ? `${(m.count / max) * 82 + 8}%` : "6px" }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2 sm:gap-3">
+        {months.map((m) => (
+          <span key={m.label} className={cn("flex-1 text-center text-[11px]", m.current ? "font-[600] text-slate-700" : "text-slate-400")}>
+            {m.label}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
-function ActiveCaregiverCard() {
-  const { patient } = useSession();
-  const bookings = useBookings();
-  const active = bookings.data && patient ? pickActive(bookings.data, patient.id) : undefined;
-  const caregiver = useCaregiver(active?.caregiver_id);
-  const shifts = useShifts(active?.id);
-  const shift = currentShift(shifts.data);
-  const checkIns = useCheckIns(active?.id, shift?.id);
-  const checkIn = checkIns.data?.find((c) => c.kind === "check_in");
+// ------------------------------------------------------------------ tables
+function CaregiverCell({ id }: { id: string }) {
+  const c = useCaregiver(id);
+  const name = c.data?.full_name ?? "Caregiver";
+  return (
+    <span className="flex items-center gap-2.5">
+      <Avatar label={initials(name)} tone={toneFor(name)} className="size-8 text-xs" />
+      <span className="truncate font-medium text-slate-800">{name}</span>
+    </span>
+  );
+}
 
-  if (bookings.isPending) return <Skeleton className="h-52 rounded-xl" />;
-
-  if (!active) {
+function CareTable({ rows }: { rows: Booking[] }) {
+  if (rows.length === 0) {
     return (
-      <Card tone="soft" delay={100}>
-        <CardHeader>
-          <CardTitle>Active caregiver</CardTitle>
-        </CardHeader>
-        <p className="text-body text-muted-foreground">No caregiver booked yet. Every one is checked and trained by CareKin.</p>
-        <Button asChild className="mt-4 w-full" variant="secondary">
+      <div className="px-5 py-10 text-center">
+        <p className="font-medium text-slate-700">No care booked</p>
+        <p className="mt-1 text-sm">Every caregiver is checked by CareKin before they can take a booking.</p>
+        <Button asChild size="sm" className="mt-4">
           <Link href="/caregivers">Find a caregiver</Link>
         </Button>
-      </Card>
+      </div>
     );
   }
-
-  const c = caregiver.data;
-  const onShift = shift?.status === "in_progress";
   return (
-    <Card delay={100} lift className="border-t-4 border-t-primary">
-      <CardHeader>
-        <CardTitle>Active caregiver</CardTitle>
-        <Badge variant={onShift ? "mint" : "neutral"} className="text-xs font-semibold">
-          {onShift ? "On shift" : active.status === "in_progress" ? "Between shifts" : "Booked"}
-        </Badge>
-      </CardHeader>
-      <div className="flex items-center gap-3">
-        <Avatar label={c ? c.full_name.split(" ").map((p) => p[0]).slice(0, 2).join("") : "…"} tone={c ? toneFor(c.full_name) : "mint"} className="size-14 text-lg" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[17px] font-bold">{c?.full_name ?? "Loading…"}</p>
-          {c && (
-            <p className="mt-0.5 flex flex-wrap items-center gap-2 text-meta">
-              <Badge className="px-2.5 py-0.5 text-xs">{TIER_LABEL[c.tier]}</Badge>
-              {c.avg_rating != null && <span className="font-semibold">★ {Number(c.avg_rating).toFixed(1)}</span>}
-            </p>
-          )}
-        </div>
-        <Button asChild>
-          <Link href="/messages">
-            <MessageCircle className="hidden sm:block" /> Message
-          </Link>
-        </Button>
-      </div>
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <Tile>
-          <p className="ck-meta">Shift hours</p>
-          <p className="mt-0.5 text-[16px] font-bold leading-snug">
-            {shift
-              ? `${formatTime(shift.scheduled_start)} – ${formatTime(shift.scheduled_end)}`
-              : `${formatTime(active.starts_at)} – ${formatTime(active.ends_at)}`}
-          </p>
-        </Tile>
-        <Tile>
-          <p className="ck-meta">Checked in</p>
-          <p className="mt-0.5 text-[16px] font-bold leading-snug">
-            {checkIn ? `${formatTime(checkIn.client_timestamp)}${checkIn.within_geofence ? " · GPS" : ""}` : "Not yet"}
-          </p>
-        </Tile>
-      </div>
-      <Link href={`/bookings/${active.id}`} className="mt-4 inline-block text-sm font-semibold text-teal underline">
-        View booking
-      </Link>
-    </Card>
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[34rem] text-left text-sm">
+        <thead className="border-y border-slate-200 bg-slate-50 text-xs uppercase text-slate-600">
+          <tr>
+            <th scope="col" className="px-5 py-3 font-medium">Caregiver</th>
+            <th scope="col" className="px-5 py-3 font-medium">When</th>
+            <th scope="col" className="px-5 py-3 font-medium">Status</th>
+            <th scope="col" className="px-5 py-3 text-right font-medium">Total</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map((b) => {
+            const st = STATUS_LABEL[b.status];
+            return (
+              <tr key={b.id} className="hover:bg-slate-50">
+                <td className="px-5 py-3">
+                  <Link href={`/bookings/${b.id}`} className="block">
+                    <CaregiverCell id={b.caregiver_id} />
+                  </Link>
+                </td>
+                <td className="whitespace-nowrap px-5 py-3 text-slate-600">
+                  {formatDayMonth(b.starts_at)} · {formatTime(b.starts_at)}
+                </td>
+                <td className="px-5 py-3">
+                  <Badge variant={st.variant} className="text-xs font-medium">
+                    {st.label}
+                  </Badge>
+                </td>
+                <td className="whitespace-nowrap px-5 py-3 text-right font-medium text-slate-800">{formatMoney(b.total_minor, b.currency)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
+// ------------------------------------------------------------------ page
 export function PatientHome() {
   const { me, patient } = useSession();
   const patientId = patient?.id;
   const care = useCareProfile(patientId);
+  const contacts = useContacts(patientId);
   const location = useUserLocation(patient?.home_location);
   const yearAgo = useMemo(() => new Date(Date.now() - 365 * 86_400_000).toISOString(), []);
-  const crises = usePassport(patientId, { entry_type: ["crisis"], since: yearAgo, limit: 1 });
+  const crises = usePassport(patientId, { entry_type: ["crisis"], since: yearAgo, limit: 100 });
   const recent = usePassport(patientId, { limit: 6 });
   const shares = useShares(patientId);
   const links = useFamilyLinks(patientId, patient?.access !== "family");
   const bookings = useBookings();
-  const active = bookings.data && patient ? pickActive(bookings.data, patient.id) : undefined;
-  const shifts = useShifts(active?.id);
-  const shift = currentShift(shifts.data);
-  const checkIns = useCheckIns(active?.id, shift?.id);
-  const caregiver = useCaregiver(active?.caregiver_id);
   const [familyOpen, setFamilyOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [mapFor, setMapFor] = useState<Facility | null>(null);
 
   const facilities = useQuery({
     queryKey: ["nearby-facilities", location.coords?.latitude, location.coords?.longitude],
-    queryFn: () =>
-      fetchFacilities({
-        ...(location.coords ?? {}),
-        limit: 3,
-      }),
+    queryFn: () => fetchFacilities({ ...(location.coords ?? {}), limit: 5 }),
     staleTime: 5 * 60_000,
   });
-  const nearest = facilities.data?.items[0];
 
-  const triggers = splitList(care.data?.known_triggers);
-  const meds = splitList(care.data?.medications_overview);
-  const lastCrisis = crises.data?.entries[0];
-
-  const activity = useMemo(() => {
-    const items: { id: string; title: string; sub: string; at: string; kind: "checkin" | "share" | "crisis" | "note" }[] = [];
-    const ci = checkIns.data?.find((c) => c.kind === "check_in");
-    if (ci && caregiver.data) {
-      items.push({
-        id: ci.id,
-        title: "Caregiver checked in",
-        sub: `${caregiver.data.full_name}${ci.within_geofence ? " · GPS verified at your address" : ""}`,
-        at: ci.client_timestamp,
-        kind: "checkin",
-      });
-    }
-    for (const s of shares.data ?? []) {
-      items.push({
-        id: s.id,
-        title: "Health passport shared",
-        sub: `With ${s.facility_name ?? "a facility"} (your consent)`,
-        at: s.created_at,
-        kind: "share",
-      });
-    }
-    for (const e of recent.data?.entries ?? []) {
-      items.push({
-        id: e.id,
-        title: e.entry_type === "crisis" ? "Crisis event logged" : humanize(e.entry_type),
-        sub: e.summary,
-        at: e.occurred_at,
-        kind: e.entry_type === "crisis" ? "crisis" : "note",
-      });
-    }
-    return items.sort((a, b) => +new Date(b.at) - +new Date(a.at)).slice(0, 4);
-  }, [checkIns.data, caregiver.data, shares.data, recent.data]);
+  const mine = useMemo(
+    () => (bookings.data ?? []).filter((b) => b.patient_id === patientId),
+    [bookings.data, patientId],
+  );
+  const upcoming = useMemo(
+    () => mine.filter((b) => OPEN.has(b.status)).sort((a, z) => +new Date(a.starts_at) - +new Date(z.starts_at)).slice(0, 5),
+    [mine],
+  );
+  const activeBooking = mine.find((b) => b.status === "in_progress") ?? mine.find((b) => ACTIVE.has(b.status));
+  const shifts = useShifts(activeBooking?.id);
 
   if (!patient) return null;
   const isSelf = patient.access === "self";
-  const name = firstName(me.full_name);
+  const triggers = splitList(care.data?.known_triggers);
+  const meds = splitList(care.data?.medications_overview);
+  const crisisEntries = crises.data?.entries ?? [];
+
+  // Profile completeness: what a hospital or caregiver needs to help in a crisis.
+  const checks = [
+    !!patient.genotype,
+    !!patient.blood_group,
+    !!patient.home_location,
+    triggers.length > 0,
+    meds.length > 0,
+    (contacts.data?.length ?? 0) > 0,
+  ];
+  const done = checks.filter(Boolean).length;
+  const crisisMonths = new Set(crisisEntries.map((e) => e.occurred_at.slice(0, 7))).size;
+  const shiftsDone = shifts.data?.filter((s) => s.status === "completed").length ?? 0;
+  const shiftsTotal = shifts.data?.length ?? 0;
+  const activeCount = mine.filter((b) => ACTIVE.has(b.status)).length;
+
+  const activity = [
+    ...(shares.data ?? []).map((s) => ({ id: s.id, title: "Passport shared", sub: s.facility_name ?? "A facility", at: s.created_at, crisis: false })),
+    ...(recent.data?.entries ?? []).map((e) => ({
+      id: e.id,
+      title: e.entry_type === "crisis" ? "Crisis logged" : humanize(e.entry_type),
+      sub: e.summary,
+      at: e.occurred_at,
+      crisis: e.entry_type === "crisis",
+    })),
+  ]
+    .sort((a, b) => +new Date(b.at) - +new Date(a.at))
+    .slice(0, 5);
 
   async function exportPdf() {
     setExporting(true);
@@ -222,249 +264,240 @@ export function PatientHome() {
 
   return (
     <div>
-      <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-[#0F8577] via-[#0C7367] to-[#075248] p-6 text-white shadow-lg shadow-teal/20 animate-in fade-in-0 slide-in-from-top-2 duration-500 md:p-8">
-        <div aria-hidden className="absolute -right-10 -top-16 size-56 rounded-full bg-white/10" />
-        <div aria-hidden className="absolute -bottom-20 right-24 size-44 rounded-full bg-crisis/20" />
-        <div className="relative">
-          <p className="text-[14px] text-white/80">
-            {formatLongDate()}
-            {isSelf ? "" : ` · Caring for ${firstName(patient.full_name)}`}
-          </p>
-          <h1 className="mt-1 text-[28px] font-bold leading-9 md:text-[34px] md:leading-10">
-            {greeting()}, {name}
-          </h1>
-          <nav aria-label="Quick actions" className="mt-4 flex flex-wrap gap-2">
-            {[
-              { href: "/caregivers", label: "Find a caregiver", icon: Users },
-              { href: "/facilities", label: "Facilities", icon: MapPin },
-              { href: "/passport", label: "Passport", icon: FileText },
-              { href: "/messages", label: "Messages", icon: MessageCircle },
-            ].map(({ href, label, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                className="inline-flex h-10 items-center gap-2 rounded-full bg-white/15 px-4 text-[14px] font-semibold backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/25"
-              >
-                <Icon className="size-4" aria-hidden /> {label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      </div>
+      <DashTitle
+        title="Dashboard"
+        subtitle={`${greeting()}, ${firstName(me.full_name)} · ${formatLongDate()}${isSelf ? "" : ` · Caring for ${firstName(patient.full_name)}`}`}
+        crumbs={["Care Kin", "Menu"]}
+      />
 
       <DeviceSetupCard />
 
-      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-3 lg:items-start">
-        {/* Column 1 */}
-        <div className="contents lg:flex lg:flex-col lg:gap-5">
-          <Card tone="crisis" delay={0} className="order-1 flex flex-col items-center py-6 lg:order-none">
-            <CrisisButton patientId={patient.id} />
-            {nearest && (
-              <div className="mt-5 hidden w-full rounded-lg bg-white/80 p-4 shadow-sm lg:block">
-                <p className="ck-meta text-foreground/80">Nearest SCD facility</p>
-                <p className="mt-0.5 text-[17px] font-bold text-teal">{nearest.facility.name}</p>
-                <p className="ck-meta">
-                  {nearest.distance_km != null ? `${nearest.distance_km.toFixed(1)} km away` : nearest.facility.address}
-                </p>
-              </div>
-            )}
-          </Card>
+      {/* Stats */}
+      <div className="mb-5 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Profile complete"
+          badge="Profile"
+          value={`${Math.round((done / checks.length) * 100)}%`}
+          note={`${done} of ${checks.length} done`}
+          progress={done / checks.length}
+          color="teal"
+          href="/passport"
+        />
+        <StatCard
+          title="Crises"
+          badge="12 months"
+          value={crises.isPending ? "–" : crisisEntries.length}
+          note={crisisEntries[0] ? `Last ${formatDate(crisisEntries[0].occurred_at)}` : "None logged"}
+          progress={crisisMonths / 12}
+          color="coral"
+          href="/passport"
+        />
+        <StatCard
+          title="Active care"
+          badge="Now"
+          value={bookings.isPending ? "–" : activeCount}
+          note={shiftsTotal ? `${shiftsDone} of ${shiftsTotal} shifts done` : activeCount ? "Booked" : "No active booking"}
+          progress={shiftsTotal ? shiftsDone / shiftsTotal : 0}
+          color="amber"
+          href="/bookings"
+        />
+        <StatCard
+          title="Emergency contacts"
+          badge="Alerts"
+          value={contacts.isPending ? "–" : (contacts.data?.length ?? 0)}
+          note={`${links.data?.length ?? 0} family following`}
+          progress={Math.min(1, (contacts.data?.length ?? 0) / 3)}
+          color="blue"
+          href="/settings"
+        />
+      </div>
 
-          <section aria-labelledby="nearby-heading" className="order-4 animate-in fade-in-0 slide-in-from-bottom-3 duration-500 fill-mode-both [animation-delay:150ms] lg:order-none lg:ck-card lg:p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 id="nearby-heading" className="text-[17px] font-bold">
-                <span className="lg:hidden">Nearest SCD facilities</span>
-                <span className="hidden lg:inline">Nearby facilities</span>
-              </h2>
-              <Link href="/facilities" className="text-sm font-semibold text-teal hover:underline">
-                View all
-              </Link>
+      {/* Chart + crisis help */}
+      <div className="mb-5 grid gap-5 xl:grid-cols-3">
+        <Card className="xl:col-span-2">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <CardTitle>Crisis history</CardTitle>
+              <p className="text-sm">Crises logged in the health passport, last 12 months</p>
             </div>
-            <div className="space-y-3">
-              {facilities.isPending && <Skeleton className="h-36 rounded-xl" />}
-              {facilities.data?.items.slice(0, 2).map((r) => <FacilityCardCompact key={r.facility.id} r={r} />)}
-              {facilities.data?.items.length === 0 && (
-                <p className="text-body text-muted-foreground">No verified facilities found near you yet.</p>
-              )}
-              {facilities.isError && <p className="text-body text-crisis-ink">Couldn&apos;t load facilities.</p>}
-              {!location.coords && (
-                <Button variant="secondary" size="sm" onClick={() => void location.locate()} loading={location.locating}>
-                  Use my location for distances
-                </Button>
-              )}
-            </div>
-          </section>
-        </div>
-
-        {/* Column 2 */}
-        <div className="contents lg:flex lg:flex-col lg:gap-5">
-          <div className="order-2 lg:order-none">
-            <ActiveCaregiverCard />
+            <Link href="/passport" className="inline-flex items-center gap-1 text-sm font-medium text-teal hover:underline">
+              View passport <ArrowUpRight className="size-4" aria-hidden />
+            </Link>
           </div>
-          <Card delay={250} className="order-5 lg:order-none">
-            <CardHeader>
-              <CardTitle>Recent activity</CardTitle>
-            </CardHeader>
-            {activity.length === 0 ? (
-              <p className="text-body text-muted-foreground">Check-ins, shared records and crisis events will show up here.</p>
-            ) : (
-              <ul className="divide-y divide-line">
-                {activity.map((a) => (
-                  <li key={a.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                    <span
-                      className={cn("mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full", ACTIVITY_STYLE[a.kind].tone)}
-                      aria-hidden
-                    >
-                      {(() => {
-                        const Icon = ACTIVITY_STYLE[a.kind].icon;
-                        return <Icon className="size-4" />;
-                      })()}
-                    </span>
+          {crises.isPending ? <Skeleton className="h-56" /> : <CrisisChart dates={crisisEntries.map((e) => e.occurred_at)} />}
+          {!crises.isPending && crisisEntries.length === 0 && (
+            <p className="mt-3 text-center text-sm">No crises logged in the past year.</p>
+          )}
+        </Card>
+
+        <Card className="flex flex-col items-center justify-center text-center">
+          <CardTitle className="mb-1 flex items-center gap-2">
+            <Zap className="size-4 text-crisis" aria-hidden /> Crisis help
+          </CardTitle>
+          <p className="mb-2 text-sm">Alerts your contacts and caregiver with your location.</p>
+          <CrisisButton patientId={patient.id} className="-mb-12 origin-top scale-[0.82]" />
+        </Card>
+      </div>
+
+      {/* Tables */}
+      <div className="mb-5 grid gap-5 xl:grid-cols-2">
+        <Card className="p-0">
+          <div className="flex items-center justify-between px-5 py-4">
+            <CardTitle>Upcoming care</CardTitle>
+            <Link href="/bookings" className="text-sm font-medium text-teal hover:underline">
+              All bookings
+            </Link>
+          </div>
+          {bookings.isPending ? <Skeleton className="mx-5 mb-5 h-32" /> : <CareTable rows={upcoming} />}
+        </Card>
+
+        <Card className="p-0">
+          <div className="flex items-center justify-between px-5 py-4">
+            <CardTitle>Nearest SCD facilities</CardTitle>
+            <Link href="/facilities" className="text-sm font-medium text-teal hover:underline">
+              View all
+            </Link>
+          </div>
+          {facilities.isPending ? (
+            <Skeleton className="mx-5 mb-5 h-32" />
+          ) : facilities.isError ? (
+            <p className="px-5 pb-6 text-sm text-crisis-ink">Couldn&apos;t load facilities.</p>
+          ) : (facilities.data?.items.length ?? 0) === 0 ? (
+            <p className="px-5 pb-6 text-sm">No verified facilities found near you yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[30rem] text-left text-sm">
+                <thead className="border-y border-slate-200 bg-slate-50 text-xs uppercase text-slate-600">
+                  <tr>
+                    <th scope="col" className="px-5 py-3 font-medium">Facility</th>
+                    <th scope="col" className="px-5 py-3 font-medium">Distance</th>
+                    <th scope="col" className="px-5 py-3 font-medium">Services</th>
+                    <th scope="col" className="px-5 py-3 text-right font-medium">
+                      <span className="sr-only">Directions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {facilities.data!.items.map((r) => (
+                    <tr key={r.facility.id} className="hover:bg-slate-50">
+                      <td className="px-5 py-3">
+                        <p className="font-medium text-slate-800">{r.facility.name}</p>
+                        {is24hEmergency(r) && <p className="text-xs font-medium text-crisis">Open 24 hours</p>}
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-3 text-slate-600">{formatDistanceKm(r.distance_km) ?? "—"}</td>
+                      <td className="px-5 py-3 text-slate-600">{serviceTags(r).slice(0, 2).join(", ") || "—"}</td>
+                      <td className="px-5 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setMapFor(r.facility)}
+                          className="inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium text-teal hover:bg-mint-soft"
+                        >
+                          <Navigation className="size-4" aria-hidden /> Map
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {!location.coords && (
+            <div className="border-t border-slate-200 px-5 py-3">
+              <button type="button" onClick={() => void location.locate()} className="inline-flex items-center gap-1.5 text-sm font-medium text-teal hover:underline">
+                <MapPin className="size-4" aria-hidden /> {location.locating ? "Finding you…" : "Use my location for distances"}
+              </button>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Passport, activity, family */}
+      <div className="grid gap-5 xl:grid-cols-3">
+        <Card>
+          <div className="mb-4 flex items-center justify-between">
+            <CardTitle>Health passport</CardTitle>
+            <button onClick={exportPdf} disabled={exporting} className="inline-flex items-center gap-1.5 text-sm font-medium text-teal hover:underline disabled:opacity-60">
+              <Download className="size-4" aria-hidden /> {exporting ? "Preparing…" : "PDF"}
+            </button>
+          </div>
+          <dl className="grid grid-cols-2 gap-3">
+            <div className="rounded-lg bg-slate-50 p-3">
+              <dt className="text-xs">Genotype</dt>
+              <dd className="text-2xl font-medium text-slate-800">{patient.genotype ?? "—"}</dd>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-3">
+              <dt className="text-xs">Blood group</dt>
+              <dd className="text-2xl font-medium text-slate-800">{patient.blood_group ?? "—"}</dd>
+            </div>
+          </dl>
+          <p className="mt-4 text-xs font-medium uppercase text-slate-500">Triggers</p>
+          <p className="mt-1 text-sm text-slate-700">{triggers.length ? triggers.join(", ") : "None added"}</p>
+          <p className="mt-3 text-xs font-medium uppercase text-slate-500">Medicines</p>
+          <p className="mt-1 text-sm text-slate-700">{meds.length ? meds.join(", ") : "None added"}</p>
+          <Link href="/passport" className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-teal hover:underline">
+            <FileText className="size-4" aria-hidden /> Open passport
+          </Link>
+        </Card>
+
+        <Card>
+          <CardTitle className="mb-4">Recent activity</CardTitle>
+          {activity.length === 0 ? (
+            <p className="text-sm">Shared records and passport entries will show up here.</p>
+          ) : (
+            <ul className="space-y-4">
+              {activity.map((a) => (
+                <li key={a.id} className="flex gap-3">
+                  <span className={cn("mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full", a.crisis ? "bg-crisis-soft text-crisis" : "bg-mint text-teal")} aria-hidden>
+                    {a.crisis ? <Zap className="size-4" /> : a.title === "Passport shared" ? <Share2 className="size-4" /> : <FileText className="size-4" />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-slate-800">{a.title}</p>
+                    <p className="truncate text-sm">{a.sub}</p>
+                  </div>
+                  <time dateTime={a.at} className="shrink-0 text-xs text-slate-400">
+                    {formatDayMonth(a.at)}
+                  </time>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        {patient.access !== "family" && (
+          <Card>
+            <div className="mb-4 flex items-center justify-between">
+              <CardTitle>Family access</CardTitle>
+              <button onClick={() => setFamilyOpen(true)} className="text-sm font-medium text-teal hover:underline">
+                Manage
+              </button>
+            </div>
+            {links.isPending ? (
+              <Skeleton className="h-12" />
+            ) : links.data && links.data.length > 0 ? (
+              <ul className="space-y-3">
+                {links.data.map((l) => (
+                  <li key={l.id} className="flex items-center gap-3">
+                    <Avatar label="FM" tone="blue" className="size-9 text-xs" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-[16px] font-bold">{a.title}</p>
-                      <p className="ck-meta break-words">{a.sub}</p>
+                      <p className="text-sm font-medium text-slate-800">Family member</p>
+                      <p className="text-xs">{l.can_fund ? "Can fund care" : "Follows care"}</p>
                     </div>
-                    <time dateTime={a.at} className="ck-meta shrink-0">
-                      {when(a.at)}
-                    </time>
+                    <span className="text-xs font-medium text-teal">{l.share_scope.health_data ? "Sees reports" : "Basic"}</span>
                   </li>
                 ))}
               </ul>
-            )}
-          </Card>
-        </div>
-
-        {/* Column 3 */}
-        <div className="contents lg:flex lg:flex-col lg:gap-5">
-          <Card delay={200} lift className="order-3 lg:order-none">
-            <CardHeader>
-              <CardTitle>Health passport</CardTitle>
-              <button
-                onClick={exportPdf}
-                disabled={exporting}
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal hover:underline disabled:opacity-60"
-              >
-                <Download className="size-4" aria-hidden /> {exporting ? "Preparing…" : "Export PDF"}
-              </button>
-            </CardHeader>
-            <div className="grid grid-cols-3 gap-2.5">
-              <Tile className="bg-crisis-soft text-center">
-                <p className="ck-meta">Blood type</p>
-                <p className="mt-1 text-[26px] font-bold leading-8 text-crisis">{patient.blood_group ?? "—"}</p>
-              </Tile>
-              <Tile className="bg-amber-soft text-center">
-                <p className="ck-meta">Genotype</p>
-                <p className="mt-1 text-[26px] font-bold leading-8 text-amber-ink">{patient.genotype ?? "—"}</p>
-              </Tile>
-              <Tile className="bg-mint text-center">
-                <p className="ck-meta">Crises (yr)</p>
-                <p className="mt-1 text-[26px] font-bold leading-8 text-teal">{crises.data?.total_entries ?? "—"}</p>
-              </Tile>
-            </div>
-            {triggers.length > 0 && (
-              <div className="mt-4">
-                <p className="ck-meta mb-2">Common triggers</p>
-                <ul className="flex flex-wrap gap-2">
-                  {triggers.map((t) => (
-                    <li key={t}>
-                      <Badge variant="neutral" className="text-[13px]">
-                        {t}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {meds.length > 0 && (
-              <div className="mt-4">
-                <p className="ck-meta mb-2">Current medications</p>
-                <ul className="space-y-1">
-                  {meds.map((m) => (
-                    <li key={m} className="flex items-center gap-2 text-body">
-                      <span className="size-1.5 rounded-full bg-primary" aria-hidden /> {m}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <div className="mt-4 flex items-center justify-between border-t-[1.5px] border-line pt-3 text-meta">
-              <span className="text-muted-foreground">
-                {lastCrisis ? `Last crisis: ${formatDate(lastCrisis.occurred_at)}` : "No crises logged"}
-              </span>
-              <Link href="/passport" className="font-semibold text-teal hover:underline">
-                View full history →
-              </Link>
-            </div>
-          </Card>
-
-          <Card tone="blue" delay={350} className="order-6 lg:order-none">
-            <CardHeader className="mb-3">
-              <div>
-                <CardTitle>CareKin Companion</CardTitle>
-                <p className="ck-meta">AI check-in · WhatsApp</p>
-              </div>
-              <Badge variant={me.consents.llm_processing ? "mint" : "neutral"} className="text-xs font-semibold">
-                {me.consents.llm_processing ? "Active" : "Off"}
-              </Badge>
-            </CardHeader>
-            {me.consents.llm_processing ? (
-              <p className="rounded-lg bg-white/80 p-4 text-[15px] italic leading-snug shadow-sm">
-                “Good morning {firstName(patient.full_name)}! Have you had your medication today? Remember to stay hydrated.”
-              </p>
             ) : (
-              <p className="text-body text-muted-foreground">Turn it on in settings to get hydration, medication and appointment check-ins.</p>
+              <p className="text-sm">Nobody follows this care yet.</p>
             )}
-            <p className="ck-meta mt-3">
-              No medical advice, dosing or diagnosis. Clinical questions go to your doctor.
-            </p>
-            {!me.consents.llm_processing && (
-              <Button asChild variant="secondary" size="sm" className="mt-3">
-                <Link href="/settings">Open settings</Link>
-              </Button>
-            )}
+            <Button variant="secondary" size="sm" className="mt-4" onClick={() => setFamilyOpen(true)}>
+              <Plus /> Add family member
+            </Button>
+            <FamilyDialog patientId={patient.id} open={familyOpen} onOpenChange={setFamilyOpen} />
           </Card>
-
-          {patient.access !== "family" && (
-            <Card tone="soft" delay={450} className="order-7 lg:order-none">
-              <CardHeader className="mb-3">
-                <CardTitle>Family access</CardTitle>
-                <button onClick={() => setFamilyOpen(true)} className="text-sm font-semibold text-teal hover:underline">
-                  Manage
-                </button>
-              </CardHeader>
-              {links.isPending ? (
-                <Skeleton className="h-12" />
-              ) : links.data && links.data.length > 0 ? (
-                <ul className="space-y-3">
-                  {links.data.map((l) => (
-                    <li key={l.id} className="flex items-center gap-3">
-                      <Avatar label="FM" tone="blue" className="size-11 text-sm" />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-bold">Family member</p>
-                        <p className="ck-meta">{l.can_fund ? "Can fund care" : "Follows care"}</p>
-                      </div>
-                      <span className="text-sm font-semibold text-teal">
-                        {l.share_scope.health_data ? "Can view reports" : "Basic access"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-body text-muted-foreground">
-                  Nobody follows this care yet. Add a family member to share updates.
-                </p>
-              )}
-              <Button variant="secondary" size="sm" className="mt-3" onClick={() => setFamilyOpen(true)}>
-                <Plus /> Add family member
-              </Button>
-              <FamilyDialog patientId={patient.id} open={familyOpen} onOpenChange={setFamilyOpen} />
-            </Card>
-          )}
-        </div>
+        )}
       </div>
-      <span className={cn("sr-only")} aria-live="polite">
-        {location.source === "gps" ? "Using your current location" : ""}
-      </span>
+
+      <FacilityMapDialog facility={mapFor} onClose={() => setMapFor(null)} />
     </div>
   );
 }

@@ -42,7 +42,7 @@ const CardHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement
 );
 
 const CardTitle = ({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
-  <h2 className={cn("text-card font-bold text-foreground", className)} {...props} />
+  <h2 className={cn("text-base font-[600] text-slate-800", className)} {...props} />
 );
 
 /** Mint stat tile used on passport, shift and escrow cards. */

@@ -82,6 +82,7 @@ class TermiiSMSClient:
         self._api_key = settings.SMS_PROVIDER_API_KEY.get_secret_value()
         self._url = settings.SMS_PROVIDER_BASE_URL.rstrip("/") + "/api/sms/send"
         self._sender = settings.SMS_SENDER_ID
+        self._channel = settings.SMS_TERMII_CHANNEL
         self._timeout = settings.SMS_TIMEOUT_SECONDS
         self._transport = transport
 
@@ -94,7 +95,7 @@ class TermiiSMSClient:
             "from": self._sender,
             "sms": body,
             "type": "plain",
-            "channel": "dnd",
+            "channel": self._channel,
         }
         try:
             async with httpx.AsyncClient(timeout=self._timeout, transport=self._transport) as http:
@@ -102,7 +103,10 @@ class TermiiSMSClient:
         except httpx.HTTPError as exc:
             raise SMSDeliveryError(f"Termii unreachable: {type(exc).__name__}") from exc
         if response.status_code != 200:
-            raise SMSDeliveryError(f"Termii returned HTTP {response.status_code}")
+            # Termii explains refusals in "message" (wrong key, unapproved sender, no balance).
+            raise SMSDeliveryError(
+                f"Termii returned HTTP {response.status_code}: {_termii_reason(response)}"
+            )
         try:
             data = response.json()
         except ValueError as exc:
@@ -114,6 +118,16 @@ class TermiiSMSClient:
         return SentMessage(
             to=to, body=body, provider_ref=str(message_id), sent_at=datetime.now(UTC)
         )
+
+
+def _termii_reason(response: httpx.Response) -> str:
+    """Termii's own explanation, short and safe to log. Never contains the message text."""
+    try:
+        data = response.json()
+    except ValueError:
+        return "no details"
+    reason = data.get("message") if isinstance(data, dict) else None
+    return str(reason)[:200] if reason else "no details"
 
 
 _mock_client = MockSMSClient()

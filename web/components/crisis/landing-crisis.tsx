@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MapPin, Phone, ShieldCheck, TriangleAlert, Zap } from "lucide-react";
 import { FacilityCard, alertLabel } from "@/components/crisis/crisis-screen";
+import { Starburst } from "@/components/marketing/starburst";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ApiError, errorMessage } from "@/lib/api/client";
 import { quickPosition } from "@/lib/crisis";
@@ -52,8 +54,19 @@ function CallButton({ className }: { className?: string }) {
  * Any other phone gets the emergency number and the nearest facility, and the press is
  * logged for ops. Nobody is alerted from a phone we can't tie to a patient.
  */
-export function LandingCrisis({ enrolled: enrolledAtLoad, firstName }: { enrolled: boolean; firstName: string | null }) {
+export function LandingCrisis({
+  enrolled: enrolledAtLoad,
+  firstName,
+  variant = "full",
+}: {
+  enrolled: boolean;
+  firstName: string | null;
+  /** "compact": an outlined button for the hero; the countdown and status open in a dialog. */
+  variant?: "full" | "compact";
+}) {
   const [enrolled, setEnrolled] = useState(enrolledAtLoad);
+  // Compact only: the dialog was closed while an alert is still open. The button reopens it.
+  const [minimized, setMinimized] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [hold, setHold] = useState(0); // 0..1 while the button is held
   const [notice, setNotice] = useState<string | null>(null);
@@ -198,83 +211,8 @@ export function LandingCrisis({ enrolled: enrolledAtLoad, firstName }: { enrolle
   // ---- views
   const ring = 2 * Math.PI * 104;
 
-  return (
-    <div className="flex flex-col items-center text-center">
-      {(phase.kind === "idle" || phase.kind === "countdown") && (
-        <>
-          <button
-            type="button"
-            onPointerDown={startHold}
-            onPointerUp={endHold}
-            onPointerLeave={endHold}
-            onPointerCancel={endHold}
-            onKeyDown={(e) => {
-              // Holding a key is awkward: the keyboard goes straight to the cancellable countdown.
-              if ((e.key === "Enter" || e.key === " ") && phase.kind === "idle") {
-                e.preventDefault();
-                if (enrolled) setPhase({ kind: "countdown", left: COUNTDOWN_S });
-                else openHelp();
-              }
-            }}
-            onContextMenu={(e) => e.preventDefault()}
-            disabled={phase.kind === "countdown"}
-            aria-label={
-              enrolled
-                ? `Crisis. Hold for 2 seconds to alert ${firstName ?? "the patient"}'s family and caregiver.`
-                : "Emergency help. Shows the emergency number and the nearest facility."
-            }
-            className="relative flex size-[232px] touch-none select-none items-center justify-center rounded-full bg-[#FCE7E8] transition-transform active:scale-[0.98]"
-          >
-            <span aria-hidden className="absolute inset-[14px] animate-halo rounded-full bg-[#F8D3D5]" />
-            <svg aria-hidden viewBox="0 0 232 232" className="absolute inset-0 -rotate-90">
-              <circle
-                cx="116"
-                cy="116"
-                r="104"
-                fill="none"
-                stroke="#A82A31"
-                strokeWidth="8"
-                strokeLinecap="round"
-                strokeDasharray={ring}
-                strokeDashoffset={ring * (1 - hold)}
-                className={hold > 0 ? "opacity-100" : "opacity-0"}
-              />
-            </svg>
-            <span className="relative flex size-[172px] flex-col items-center justify-center rounded-full bg-crisis text-white shadow-[0_8px_24px_rgba(214,56,64,0.35)]">
-              {phase.kind === "countdown" ? (
-                <>
-                  <span className="text-[56px] font-bold leading-none">{phase.left}</span>
-                  <span className="mt-1 text-[14px]">Sending alert…</span>
-                </>
-              ) : (
-                <>
-                  <Zap className="mb-1.5 size-8" strokeWidth={1.75} aria-hidden />
-                  <span className="text-[22px] font-bold tracking-wide">CRISIS</span>
-                  <span className="mt-0.5 text-[13px]">{enrolled ? (hold > 0 ? "Keep holding…" : "Hold 2 seconds") : "Get help now"}</span>
-                </>
-              )}
-            </span>
-          </button>
-
-          {phase.kind === "countdown" ? (
-            <Button size="lg" variant="outline" className="mt-4 h-12 w-full max-w-xs bg-white" onClick={() => setPhase({ kind: "idle" })}>
-              Cancel
-            </Button>
-          ) : (
-            <p className="mt-3 max-w-xs text-[14px] leading-snug text-foreground/80">
-              {enrolled ? (
-                <>
-                  One-tap crisis is on for <span className="font-semibold">{firstName ?? "this phone"}</span>. Alerts family and
-                  caregiver with your location. No sign-in needed.
-                </>
-              ) : (
-                <>Shows the emergency number and the nearest hospital that treats sickle cell.</>
-              )}
-            </p>
-          )}
-        </>
-      )}
-
+  const panels = (
+    <>
       {phase.kind === "sending" && (
         <div className="w-full max-w-md space-y-3" aria-live="assertive">
           <div className="ck-card border-[#F3B8BB] bg-white p-5">
@@ -368,6 +306,165 @@ export function LandingCrisis({ enrolled: enrolledAtLoad, firstName }: { enrolle
           </button>
         </div>
       )}
+    </>
+  );
+
+  if (variant === "compact") {
+    const open = phase.kind !== "idle" && !minimized;
+    const alertOpen = phase.kind === "active" || phase.kind === "sending";
+    return (
+      <>
+        <button
+          type="button"
+          onPointerDown={(e) => {
+            if (alertOpen) {
+              setMinimized(false);
+              return;
+            }
+            if (e.pointerType === "mouse" && e.button !== 0) return;
+            startHold();
+          }}
+          onPointerUp={endHold}
+          onPointerLeave={endHold}
+          onPointerCancel={endHold}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" && e.key !== " ") return;
+            e.preventDefault();
+            if (alertOpen) setMinimized(false);
+            else if (phase.kind === "idle") {
+              if (enrolled) setPhase({ kind: "countdown", left: COUNTDOWN_S });
+              else openHelp();
+            }
+          }}
+          onContextMenu={(e) => e.preventDefault()}
+          aria-label={
+            alertOpen
+              ? "Crisis alert is open. Show its status."
+              : enrolled
+                ? `Crisis help. Hold for 2 seconds to alert ${firstName ?? "the patient"}'s family and caregiver.`
+                : "Crisis help. Shows the emergency number and the nearest facility."
+          }
+          className="group relative inline-flex touch-none select-none items-center justify-center gap-2.5 overflow-hidden rounded-md border border-[#F2826F] px-10 py-[26px] text-lg text-[#F7A08F] transition-colors hover:border-[#F7A08F] hover:text-white"
+        >
+          <span aria-hidden className="absolute inset-y-0 left-0 bg-crisis/40 transition-[width] duration-75" style={{ width: `${hold * 100}%` }} />
+          <span className="relative">
+            {alertOpen ? "Crisis alert open" : enrolled ? (hold > 0 ? "Keep holding…" : "Hold for crisis help") : "Crisis help"}
+          </span>
+          <Starburst className="relative size-5 transition-transform duration-700 group-hover:rotate-180" />
+        </button>
+
+        <Dialog
+          open={open}
+          onOpenChange={(o) => {
+            if (o) return;
+            if (phase.kind === "active" || phase.kind === "sending") setMinimized(true);
+            else setPhase({ kind: "idle" });
+          }}
+        >
+          <DialogContent className="max-h-[92dvh] overflow-y-auto">
+            <DialogTitle className="text-center text-[22px]">
+              {phase.kind === "countdown" ? "Sending your alert" : phase.kind === "help" ? "Get help now" : "Crisis help"}
+            </DialogTitle>
+            <DialogDescription className="sr-only">Crisis alert status and emergency options</DialogDescription>
+            {phase.kind === "countdown" ? (
+              <div className="flex flex-col items-center gap-4 py-2 text-center" aria-live="assertive">
+                <span className="flex size-32 items-center justify-center rounded-full bg-crisis text-[56px] text-white shadow-[0_8px_24px_rgba(214,56,64,0.35)]">
+                  {phase.left}
+                </span>
+                <p className="text-[15px] text-ink/70">
+                  Alerting {firstName ? `${firstName}'s` : "your"} family and caregiver with your location.
+                </p>
+                <Button size="lg" variant="outline" className="h-12 w-full" onClick={() => setPhase({ kind: "idle" })}>
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center text-center">{panels}</div>
+            )}
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center text-center">
+      {(phase.kind === "idle" || phase.kind === "countdown") && (
+        <>
+          <button
+            type="button"
+            onPointerDown={startHold}
+            onPointerUp={endHold}
+            onPointerLeave={endHold}
+            onPointerCancel={endHold}
+            onKeyDown={(e) => {
+              // Holding a key is awkward: the keyboard goes straight to the cancellable countdown.
+              if ((e.key === "Enter" || e.key === " ") && phase.kind === "idle") {
+                e.preventDefault();
+                if (enrolled) setPhase({ kind: "countdown", left: COUNTDOWN_S });
+                else openHelp();
+              }
+            }}
+            onContextMenu={(e) => e.preventDefault()}
+            disabled={phase.kind === "countdown"}
+            aria-label={
+              enrolled
+                ? `Crisis. Hold for 2 seconds to alert ${firstName ?? "the patient"}'s family and caregiver.`
+                : "Emergency help. Shows the emergency number and the nearest facility."
+            }
+            className="relative flex size-[232px] touch-none select-none items-center justify-center rounded-full bg-[#FCE7E8] transition-transform active:scale-[0.98]"
+          >
+            <span aria-hidden className="absolute inset-[14px] animate-halo rounded-full bg-[#F8D3D5]" />
+            <svg aria-hidden viewBox="0 0 232 232" className="absolute inset-0 -rotate-90">
+              <circle
+                cx="116"
+                cy="116"
+                r="104"
+                fill="none"
+                stroke="#A82A31"
+                strokeWidth="8"
+                strokeLinecap="round"
+                strokeDasharray={ring}
+                strokeDashoffset={ring * (1 - hold)}
+                className={hold > 0 ? "opacity-100" : "opacity-0"}
+              />
+            </svg>
+            <span className="relative flex size-[172px] flex-col items-center justify-center rounded-full bg-crisis text-white shadow-[0_8px_24px_rgba(214,56,64,0.35)]">
+              {phase.kind === "countdown" ? (
+                <>
+                  <span className="text-[56px] font-bold leading-none">{phase.left}</span>
+                  <span className="mt-1 text-[14px]">Sending alert…</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="mb-1.5 size-8" strokeWidth={1.75} aria-hidden />
+                  <span className="text-[22px] font-bold tracking-wide">CRISIS</span>
+                  <span className="mt-0.5 text-[13px]">{enrolled ? (hold > 0 ? "Keep holding…" : "Hold 2 seconds") : "Get help now"}</span>
+                </>
+              )}
+            </span>
+          </button>
+
+          {phase.kind === "countdown" ? (
+            <Button size="lg" variant="outline" className="mt-4 h-12 w-full max-w-xs bg-white" onClick={() => setPhase({ kind: "idle" })}>
+              Cancel
+            </Button>
+          ) : (
+            <p className="mt-3 max-w-xs text-[14px] leading-snug text-foreground/80">
+              {enrolled ? (
+                <>
+                  One-tap crisis is on for <span className="font-semibold">{firstName ?? "this phone"}</span>. Alerts family and
+                  caregiver with your location. No sign-in needed.
+                </>
+              ) : (
+                <>Shows the emergency number and the nearest hospital that treats sickle cell.</>
+              )}
+            </p>
+          )}
+        </>
+      )}
+
+      {panels}
     </div>
   );
 }
