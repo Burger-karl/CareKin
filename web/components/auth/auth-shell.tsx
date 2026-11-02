@@ -1,93 +1,82 @@
 import Image from "next/image";
 import Link from "next/link";
-import { FileText, HeartHandshake, ShieldCheck, Zap } from "lucide-react";
+import { Phone, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/brand";
+import { Starburst } from "@/components/marketing/starburst";
 
 const POINTS = [
-  { icon: Zap, text: "One tap alerts your family and finds the nearest SCD facility" },
-  { icon: FileText, text: "A private health passport you share only when you choose" },
-  { icon: HeartHandshake, text: "Trained, vetted caregivers, paid through escrow" },
+  "One press alerts your family and finds the nearest SCD facility",
+  "A private health passport you share only when you choose",
+  "Vetted caregivers, paid safely through escrow",
 ];
 
 /**
- * Two-column layout for sign-in and sign-up: a calm brand panel with the logo illustration
- * on large screens, and the form on the right. On phones the panel becomes a slim banner.
+ * Sign-in and sign-up: the form on a warm background, with a rounded photo panel beside it
+ * on large screens. On phones the photo becomes a short banner above the form.
  */
 export function AuthShell({ children, wide = false }: { children: React.ReactNode; wide?: boolean }) {
   return (
-    <div className="min-h-dvh bg-background lg:grid lg:grid-cols-[minmax(420px,5fr)_6fr]">
-      {/* Brand panel (large screens) */}
-      <aside className="relative hidden overflow-hidden bg-[#075248] text-white lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:justify-between lg:p-12">
-        <Image
-          src="/photos/ward-consult.webp"
-          alt=""
-          width={1264}
-          height={848}
-          priority
-          sizes="45vw"
-          className="absolute inset-0 size-full object-cover object-[70%_50%]"
-        />
-        <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-[#075248]/95 via-[#0A6A5F]/80 to-[#075248]/95" />
-        <div className="relative w-fit rounded-2xl bg-white px-4 py-2.5 shadow-lg shadow-black/20 transition-transform hover:scale-[1.03]">
-          <Logo />
-        </div>
-
-        <div className="relative space-y-8">
-          <div>
-            <h2 className="text-[30px] font-bold leading-tight">Care that keeps up with sickle cell.</h2>
-            <ul className="mt-5 space-y-3.5">
-              {POINTS.map(({ icon: Icon, text }) => (
-                <li key={text} className="flex items-start gap-3 text-[15px] text-white/90">
-                  <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-white/15">
-                    <Icon className="size-4" aria-hidden />
-                  </span>
-                  {text}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        <p className="relative flex items-center gap-2 text-[13px] text-white/75">
-          <ShieldCheck className="size-4" aria-hidden /> Your data is encrypted. Consent is recorded under the NDPA.
-        </p>
-      </aside>
-
+    <div className="min-h-dvh bg-[#FAF8F5] text-ink lg:grid lg:grid-cols-[1fr_minmax(440px,1.05fr)] lg:gap-6 lg:p-4">
       {/* Form side */}
-      <div className="flex min-h-dvh flex-col">
-        {/* Phone banner */}
-        <header className="relative overflow-hidden bg-[#075248] px-5 pb-12 pt-5 text-white lg:hidden">
-          <Image
-            src="/photos/caregiver-home.webp"
-            alt=""
-            width={800}
-            height={600}
-            priority
-            sizes="100vw"
-            className="absolute inset-0 size-full object-cover object-[65%_30%]"
-          />
-          <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-[#075248] via-[#075248]/85 to-[#075248]/40" />
-          <div className="relative flex items-center justify-between">
-            <div className="rounded-2xl bg-white px-3 py-2 shadow-lg shadow-black/20">
-              <Logo />
-            </div>
-            <Link href="/" className="text-sm font-semibold text-white/90 underline-offset-4 hover:underline">
+      <div className="flex min-h-dvh flex-col lg:min-h-0">
+        <header className="flex items-center justify-between px-5 pt-5 lg:px-8 lg:pt-6">
+          <Logo />
+          <div className="flex items-center gap-2">
+            <a
+              href="tel:112"
+              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-crisis-soft px-3 text-[13px] font-bold text-crisis-ink ring-1 ring-[#F3B8BB]"
+            >
+              <Phone className="size-3.5" aria-hidden /> 112
+            </a>
+            <Link href="/" className="inline-flex h-9 items-center rounded-full bg-white px-4 text-[14px] font-semibold ring-1 ring-line hover:bg-mint-soft">
               Home
             </Link>
           </div>
-          <p className="relative mt-5 max-w-[16rem] text-[19px] font-bold leading-snug">
-            Carer and patient together.
-          </p>
         </header>
 
-        <main className="flex flex-1 items-start justify-center px-4 pb-10 lg:items-center lg:px-10 lg:py-12">
-          <div
-            className={`-mt-6 w-full rounded-2xl border-[1.5px] border-line bg-white p-6 shadow-xl shadow-teal/5 sm:p-8 lg:mt-0 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none ${wide ? "max-w-lg" : "max-w-md"}`}
-          >
+        {/* Phone banner */}
+        <div className="relative mx-4 mt-4 h-36 overflow-hidden rounded-[28px] lg:hidden">
+          <Image src="/photos/caregiver-home.webp" alt="" fill priority sizes="100vw" className="object-cover object-[60%_35%]" />
+          <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-[#0B2F2B]/90 via-[#0B2F2B]/60 to-transparent" />
+          <p className="absolute bottom-4 left-5 max-w-[14rem] text-[19px] font-bold leading-snug text-white">
+            Carer and patient, together.
+          </p>
+        </div>
+
+        <main className="flex flex-1 items-start justify-center px-4 py-8 lg:items-center lg:px-10">
+          <div className={`w-full rounded-[32px] bg-white p-6 ring-1 ring-line shadow-[0_24px_60px_-30px_rgba(11,47,43,0.35)] sm:p-9 ${wide ? "max-w-lg" : "max-w-md"}`}>
             {children}
           </div>
         </main>
+
+        <p className="flex items-center justify-center gap-2 px-4 pb-6 text-[13px] text-ink/55">
+          <ShieldCheck className="size-4" aria-hidden /> Your data is encrypted. Consent is recorded under the NDPA.
+        </p>
       </div>
+
+      {/* Photo panel (large screens) */}
+      <aside className="relative hidden overflow-hidden rounded-[36px] bg-[#0B2F2B] text-white lg:sticky lg:top-4 lg:flex lg:h-[calc(100dvh-2rem)] lg:flex-col lg:justify-end lg:p-10">
+        <Image src="/photos/ward-consult.webp" alt="" fill priority sizes="50vw" className="object-cover object-[65%_50%]" />
+        <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-[#0B2F2B] via-[#0B2F2B]/70 to-[#0B2F2B]/10" />
+        <div className="relative">
+          <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-1.5 text-[13px] font-semibold uppercase tracking-wider ring-1 ring-white/20">
+            <Starburst className="text-[#F7B3A1]" /> Care Kin
+          </p>
+          <h2 className="mt-5 max-w-md text-[40px] font-bold leading-[1.05] tracking-tight">
+            Care that keeps up <span className="text-white/60">with sickle cell.</span>
+          </h2>
+          <ul className="mt-6 space-y-3">
+            {POINTS.map((text) => (
+              <li key={text} className="flex items-start gap-3 text-[15px] text-white/90">
+                <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-white/15" aria-hidden>
+                  <Starburst className="size-3.5" />
+                </span>
+                {text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </aside>
     </div>
   );
 }

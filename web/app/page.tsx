@@ -1,45 +1,41 @@
 import Image from "next/image";
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { BadgeCheck, Check, FileText, HeartHandshake, MapPin, Phone, ShieldCheck, Zap } from "lucide-react";
-import { Logo } from "@/components/brand";
+import { HeartHandshake, Lock, MapPin, ShieldCheck, Users } from "lucide-react";
 import { LandingCrisis } from "@/components/crisis/landing-crisis";
-import { HeroVisual } from "@/components/landing/hero-visual";
+import { FAQS, FaqList } from "@/components/marketing/faq";
+import { CaregiverMock, CrisisMock, EscrowMock, FacilityMock, FloatBadge, PassportMock } from "@/components/marketing/mocks";
+import { MarketingShell } from "@/components/marketing/shell";
+import { Starburst } from "@/components/marketing/starburst";
+import { Eyebrow, PillLink, SectionTitle, Tick } from "@/components/marketing/ui";
 import { Reveal } from "@/components/landing/reveal";
-import { Button } from "@/components/ui/button";
 
-const FEATURES = [
+const STEPS = [
   {
-    icon: Zap,
-    title: "One-tap crisis help",
-    body: "Shares your live location and alerts your caregiver and emergency contacts, then points you to the nearest facility that treats SCD.",
-    tone: "bg-crisis-soft text-crisis",
+    n: "01",
+    title: "Create your profile",
+    body: "Sign up with your phone, add your genotype, triggers and medicines, and choose who to alert in a crisis.",
+    points: ["No referral needed", "Takes about two minutes", "For yourself or your child"],
   },
   {
-    icon: FileText,
-    title: "Health passport",
-    body: "Genotype, triggers, medications and your crisis history in one encrypted place. Show it at any hospital, share it only when you say so.",
-    tone: "bg-mint text-teal",
+    n: "02",
+    title: "Find trusted care",
+    body: "Search vetted caregivers near you for the hours you need, and pay into escrow once they accept.",
+    points: ["Checked before approval", "Pick the hours that suit you", "Money released after care"],
   },
   {
-    icon: HeartHandshake,
-    title: "Trained, vetted caregivers",
-    body: "NIN, guarantors and background checks on everyone. Pay into escrow and release it after each care booking is done.",
-    tone: "bg-mint text-teal",
-  },
-  {
-    icon: MapPin,
-    title: "SCD facility finder",
-    body: "Verified facilities with a haematologist, blood bank or 24-hour emergency unit, with the date each one was last checked.",
-    tone: "bg-mint text-teal",
+    n: "03",
+    title: "Stay protected",
+    body: "Turn on one-tap crisis for your phone, keep your passport up to date, and know where the nearest facility is.",
+    points: ["Alerts without signing in", "Passport ready for any hospital", "Family abroad kept in the loop"],
   },
 ];
 
 const AUDIENCE = [
-  ["Myself", "I live with SCD"],
-  ["My child", "I'm a guardian of a minor"],
-  ["Family abroad", "I fund and follow care"],
-  ["Caregiver", "Apply to give care"],
+  { title: "I live with sickle cell", body: "Crisis help, your passport and care at home.", icon: HeartHandshake },
+  { title: "I'm a parent or guardian", body: "Look after a child's care and approve every carer.", icon: Users },
+  { title: "I'm family abroad", body: "Fund care and follow updates from anywhere.", icon: ShieldCheck },
+  { title: "I'm a caregiver", body: "Apply, get vetted and take paid bookings.", icon: Lock },
 ];
 
 export default function Landing() {
@@ -49,303 +45,343 @@ export default function Landing() {
   const crisisName = enrolled ? (jar.get("ck_crisis_name")?.value ?? null) : null;
 
   return (
-    <div className="min-h-dvh bg-background">
-      <header className="border-b-[1.5px] border-line bg-white">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-          <Logo />
-          <nav aria-label="Account" className="flex items-center gap-1 sm:gap-2">
-            <a
-              href="tel:112"
-              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-crisis-soft px-3 text-sm font-bold text-crisis-ink hover:brightness-95"
-            >
-              <Phone className="size-4" aria-hidden /> Emergency? Call 112
-            </a>
-            <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-              <Link href="/find-care">Find a facility</Link>
-            </Button>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/login">Sign in</Link>
-            </Button>
-            <Button asChild size="sm">
-              <Link href="/register">Get started</Link>
-            </Button>
-          </nav>
-        </div>
-      </header>
-
-      <main>
-        <section aria-labelledby="crisis-heading" className="border-b-[1.5px] border-[#F3B8BB] bg-gradient-to-b from-[#FDECEC] to-[#FFF7F7]">
-          <div className="mx-auto grid max-w-6xl items-center gap-6 px-4 py-8 md:grid-cols-[1fr_auto] md:py-10">
-            <div className="text-center md:text-left">
-              <p className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-[13px] font-semibold text-crisis-ink ring-1 ring-[#F3B8BB]">
-                <span className="size-2 animate-pulse rounded-full bg-crisis" aria-hidden /> Emergency help, no sign-in
-              </p>
-              <h2 id="crisis-heading" className="mt-3 text-[26px] font-bold leading-tight md:text-[32px]">
-                In a sickle cell crisis?
-              </h2>
-              <p className="mx-auto mt-2 max-w-lg text-[16px] text-foreground/80 md:mx-0">
-                {enrolled
-                  ? "This phone is set up. Hold the button to alert family and caregiver with your location."
-                  : "Press for the emergency number and the nearest hospital that treats sickle cell. Patients who set up this phone can alert their family with one press, without signing in."}
-              </p>
-            </div>
-            <LandingCrisis enrolled={enrolled} firstName={crisisName} />
-          </div>
-        </section>
-
-        <section className="relative overflow-hidden bg-gradient-to-b from-mint-soft via-background to-background">
-          <div
-            aria-hidden
-            className="absolute inset-0 opacity-60 [background-image:radial-gradient(#cfe6e2_1.2px,transparent_1.2px)] [background-size:22px_22px] [mask-image:linear-gradient(to_bottom,black,transparent_85%)]"
-          />
-          <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 py-14 md:grid-cols-[1.1fr_1fr] md:py-24">
-            <div>
-              <p className="inline-flex items-center gap-2 rounded-full border-[1.5px] border-line bg-white px-3.5 py-1.5 text-[13px] font-semibold text-teal">
-                <span className="size-2 rounded-full bg-crisis" aria-hidden /> Built for people living with sickle cell
-              </p>
-              <h1 className="mt-5 text-[40px] font-bold leading-[1.05] tracking-tight md:text-[58px]">
-                Carer and patient, <span className="text-teal">together</span>.
+    <MarketingShell overDark>
+      {/* ---------------------------------------------------------------- hero */}
+      {/* Pulled up under the transparent header, so the dark hero starts at the top of the page. */}
+      <section aria-labelledby="hero-heading" className="relative -mt-[72px] overflow-hidden bg-[#0B2F2B]">
+        <div className="grid gap-[1.875rem] px-4 pt-[72px] md:px-6 lg:grid-cols-11 lg:gap-24 lg:pl-[max(1.5rem,calc((100vw-80rem)/2+1.5rem))] lg:pr-0">
+          <div className="self-center pt-12 lg:col-span-5 lg:pt-20">
+            <div className="mb-[1.875rem] space-y-5 lg:mb-[8.75rem]">
+              <h1 id="hero-heading" className="text-[40px] font-normal leading-[1.08] tracking-tight text-[#FDF6EE] sm:text-[47px] lg:text-[70px]">
+                Sickle cell care, <span className="text-[#F2826F]">always</span> within reach
               </h1>
-              <p className="mt-5 max-w-lg text-[18px] leading-relaxed text-muted-foreground">
-                Find trained caregivers you can trust, keep your health passport ready for any hospital, and get help
-                in a crisis with a single tap.
+              <p className="pb-2.5 text-[16px] leading-relaxed text-[#E7EFEC] lg:w-[29rem]">
+                One press alerts the people you trust, your health passport is ready for any hospital, and vetted
+                caregivers come to your home, all in one place.
               </p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Button asChild size="lg" className="h-14 px-8 text-[17px] shadow-lg shadow-teal/20">
-                  <Link href="/register">Create a free account</Link>
-                </Button>
-                <Button asChild size="lg" variant="outline" className="h-14 bg-white px-8 text-[17px]">
-                  <Link href="/login">Sign in</Link>
-                </Button>
-              </div>
-              <p className="mt-4 text-[15px]">
-                In a crisis and not signed in?{" "}
-                <Link href="/find-care" className="font-semibold text-teal underline">
-                  Find the nearest SCD facility
-                </Link>
+              <LandingCrisis enrolled={enrolled} firstName={crisisName} variant="compact" />
+            </div>
+
+            <div className="flex gap-2.5">
+              <Image
+                src="/photos/family-thumb.webp"
+                alt="A grandmother and her granddaughter smiling together"
+                width={90}
+                height={90}
+                className="size-[90px] shrink-0 rounded-md object-cover"
+              />
+              <Link
+                href="/find-care"
+                className="flex flex-1 items-center justify-between gap-2.5 rounded-md bg-white/10 p-2.5 transition-colors hover:bg-white/15 sm:flex-none"
+              >
+                <span className="pl-1">
+                  <span className="mb-4 block max-w-[9rem] text-[15px] leading-snug text-[#F8EEE2]">Find the nearest SCD facility</span>
+                  <span className="block text-xs text-[#F8EEE2]/80">Open to everyone</span>
+                </span>
+                <span className="flex size-[70px] shrink-0 items-center justify-center rounded-md bg-white" aria-hidden>
+                  <MapPin className="size-8 text-teal" />
+                </span>
+              </Link>
+            </div>
+            <p className="mt-2.5 text-sm text-[#F8EEE2]/90">NDPA-compliant data protection</p>
+          </div>
+
+          <div className="lg:col-span-6">
+            <div className="relative h-[420px] overflow-hidden rounded-xl pb-0 sm:h-[560px] lg:h-[56.25rem] lg:rounded-none">
+              <Image
+                src="/photos/hero-boy.webp"
+                alt="A smiling boy in a light blue sweater covers one eye with his hand"
+                fill
+                priority
+                sizes="(min-width: 1024px) 50vw, 100vw"
+                className="object-cover object-[50%_18%]"
+              />
+            </div>
+            <div className="h-20 lg:hidden" aria-hidden />
+          </div>
+        </div>
+      </section>
+
+      {/* ---------------------------------------------------------------- benefits */}
+      <section aria-labelledby="benefits" className="mx-auto max-w-7xl px-4 py-16 md:px-6 md:py-24">
+        <Reveal className="max-w-3xl">
+          <Eyebrow>Why Care Kin</Eyebrow>
+          <SectionTitle id="benefits" muted="for every day and every crisis.">
+            Everything you need to stay ahead,
+          </SectionTitle>
+        </Reveal>
+
+        <div className="mt-12 grid gap-6 lg:grid-cols-2">
+          <Reveal className="relative overflow-hidden rounded-[36px] bg-white ring-1 ring-line">
+            <div className="relative aspect-[16/10]">
+              <Image
+                src="/photos/ward-consult.webp"
+                alt="A doctor reviews notes with a patient in a hospital ward"
+                fill
+                sizes="(min-width: 1024px) 600px, 92vw"
+                className="object-cover"
+              />
+              <FloatBadge className="absolute left-4 top-4">Passport ready for any hospital</FloatBadge>
+            </div>
+            <div className="grid grid-cols-3 divide-x divide-line">
+              {[
+                ["1 PDF", "passport for any hospital"],
+                ["0", "codes to wait for in a crisis"],
+                ["200 m", "GPS check-in radius"],
+              ].map(([n, l]) => (
+                <div key={l} className="p-5">
+                  <p className="text-[30px] font-bold leading-8 text-teal">{n}</p>
+                  <p className="mt-1 text-[13px] leading-snug text-ink/60">{l}</p>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+
+          <Reveal delay={120} className="flex flex-col justify-between gap-6 rounded-[36px] bg-white p-7 ring-1 ring-line md:p-9">
+            <div>
+              <h3 className="text-[26px] font-bold leading-tight">From the living room to the ward</h3>
+              <p className="mt-3 text-[16px] leading-relaxed text-ink/70">
+                Sickle cell care moves between home, caregivers and hospitals. Care Kin keeps the details travelling with
+                the patient, so nobody starts from the beginning when a crisis hits.
               </p>
-              <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-[14px] font-medium text-foreground/80">
-                {["Vetted caregivers", "Payments held in escrow", "Encrypted health data"].map((t) => (
-                  <li key={t} className="flex items-center gap-2">
-                    <ShieldCheck className="size-4 text-teal" aria-hidden /> {t}
-                  </li>
-                ))}
+              <ul className="mt-6 space-y-3.5">
+                <Tick>Alerts family, guardians and the caregiver on shift</Tick>
+                <Tick>Shows the nearest verified facility, with directions</Tick>
+                <Tick>Keeps genotype, triggers and medicines in one place</Tick>
+                <Tick>Lets family abroad fund and follow care</Tick>
               </ul>
             </div>
-            <HeroVisual />
-          </div>
-        </section>
+            <div className="relative h-44 overflow-hidden rounded-3xl">
+              <Image src="/photos/child-checkup.webp" alt="A smiling boy has his chest checked with a stethoscope" fill sizes="600px" className="object-cover object-[50%_35%]" />
+            </div>
+          </Reveal>
+        </div>
+      </section>
 
-        <section aria-labelledby="features" className="relative overflow-hidden bg-[#075248]">
-          <Image
-            src="/photos/ward-round.webp"
-            alt=""
-            width={1264}
-            height={848}
-            sizes="100vw"
-            className="absolute inset-0 size-full object-cover"
-          />
-          <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-[#075248]/95 via-[#075248]/88 to-[#075248]/95" />
-          <div
-            aria-hidden
-            className="absolute -right-24 -top-24 size-80 animate-float rounded-full bg-white/5 [animation-duration:9s]"
-          />
-          <div
-            aria-hidden
-            className="absolute -bottom-28 -left-20 size-72 animate-float rounded-full bg-crisis/15 [animation-delay:2s] [animation-duration:11s]"
-          />
-
-          <div className="relative mx-auto max-w-5xl px-4 py-16 md:py-20">
-            <Reveal className="mx-auto max-w-2xl text-center text-white">
-              <p className="text-[13px] font-semibold uppercase tracking-widest text-mint">What you get</p>
-              <h2 id="features" className="mt-2 text-[30px] font-bold leading-tight md:text-[40px]">
-                Everything in one place
-              </h2>
-              <p className="mt-3 text-[17px] text-white/80">
-                Crisis help, your health records, trusted caregivers and the right hospital, working together.
-              </p>
+      {/* ---------------------------------------------------------------- what's inside */}
+      <section aria-labelledby="inside" className="bg-white py-16 md:py-24">
+        <div className="mx-auto max-w-7xl px-4 md:px-6">
+          <div className="flex flex-wrap items-end justify-between gap-6">
+            <Reveal className="max-w-2xl">
+              <Eyebrow>What&apos;s inside</Eyebrow>
+              <SectionTitle id="inside" muted="in one app.">
+                Crisis help, records and care,
+              </SectionTitle>
             </Reveal>
+            <PillLink href="/how-it-works" tone="light" className="ring-1 ring-line">
+              See how it works
+            </PillLink>
+          </div>
+          <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            <Reveal>
+              <CrisisMock className="h-full" />
+            </Reveal>
+            <Reveal delay={100}>
+              <PassportMock className="h-full" />
+            </Reveal>
+            <Reveal delay={200}>
+              <FacilityMock className="h-full" />
+            </Reveal>
+            <Reveal delay={100} className="lg:col-span-2">
+              <div className="grid h-full gap-5 rounded-[28px] bg-gradient-to-br from-[#0F8577] to-[#0B3B36] p-6 text-white md:grid-cols-[1fr_1.1fr] md:p-8">
+                <div>
+                  <Eyebrow light>Caregivers</Eyebrow>
+                  <h3 className="mt-4 text-[28px] font-bold leading-tight">Checked before they ever knock on your door</h3>
+                  <p className="mt-3 text-[15px] text-white/75">
+                    Every caregiver passes identity, guarantor and background checks. They check in by GPS when they
+                    arrive.
+                  </p>
+                </div>
+                <CaregiverMock className="text-ink" />
+              </div>
+            </Reveal>
+            <Reveal delay={200}>
+              <EscrowMock className="h-full" />
+            </Reveal>
+          </div>
+        </div>
+      </section>
 
-            <ul className="mt-10 grid gap-5 sm:grid-cols-2">
-              {FEATURES.map(({ icon: Icon, title, body, tone }, i) => (
-                <Reveal as="li" key={title} delay={i * 120}>
-                  <div className="group h-full rounded-2xl border border-white/40 bg-white/95 p-6 shadow-xl shadow-black/10 backdrop-blur transition duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-black/20">
-                    <span
-                      className={`flex size-14 items-center justify-center rounded-2xl transition duration-300 group-hover:scale-110 group-hover:-rotate-6 ${tone}`}
-                      aria-hidden
-                    >
-                      <Icon className="size-7" />
+      {/* ---------------------------------------------------------------- how it works */}
+      <section aria-labelledby="steps" className="mx-auto max-w-7xl px-4 py-16 md:px-6 md:py-24">
+        <Reveal className="mx-auto max-w-3xl text-center">
+          <Eyebrow>How it works</Eyebrow>
+          <SectionTitle id="steps" muted="in three steps.">
+            Take control of sickle cell care
+          </SectionTitle>
+        </Reveal>
+        <ol className="mt-12 grid gap-5 lg:grid-cols-3">
+          {STEPS.map((s, i) => (
+            <Reveal as="li" key={s.n} delay={i * 120}>
+              <div className="flex h-full flex-col rounded-[32px] bg-white p-7 ring-1 ring-line">
+                <span className="text-[56px] font-bold leading-none text-mint">{s.n}</span>
+                <h3 className="mt-4 text-[22px] font-bold">{s.title}</h3>
+                <p className="mt-2 text-[15px] leading-relaxed text-ink/70">{s.body}</p>
+                <ul className="mt-5 space-y-2.5">
+                  {s.points.map((p) => (
+                    <Tick key={p}>{p}</Tick>
+                  ))}
+                </ul>
+              </div>
+            </Reveal>
+          ))}
+        </ol>
+      </section>
+
+      {/* ---------------------------------------------------------------- why choose (dark) */}
+      <section aria-labelledby="trust" className="bg-[#0B2F2B] py-16 text-white md:py-24">
+        <div className="mx-auto grid max-w-7xl gap-12 px-4 md:px-6 lg:grid-cols-[1.1fr_1fr] lg:items-center">
+          <div>
+            <Reveal>
+              <Eyebrow light>Why families trust us</Eyebrow>
+              <SectionTitle id="trust" light muted="and your privacy.">
+                Built around your safety
+              </SectionTitle>
+            </Reveal>
+            <ul className="mt-10 space-y-6">
+              {[
+                ["Vetted caregivers", "NIN, two guarantors, a background check and, for nurses, a verified licence. A person at CareKin approves every carer."],
+                ["Money held safely", "You pay into escrow when a carer accepts. The money is released only after the care is done."],
+                ["Your data, your call", "Your passport is encrypted. Every share has an end date, every view is logged, and consent follows the NDPA."],
+              ].map(([t, b], i) => (
+                <Reveal as="li" key={t} delay={i * 100}>
+                  <div className="flex gap-4">
+                    <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white/10" aria-hidden>
+                      <Starburst className="size-6 text-[#F7B3A1]" />
                     </span>
-                    <h3 className="mt-5 text-[19px] font-bold">{title}</h3>
-                    <p className="mt-1.5 text-body text-muted-foreground">{body}</p>
+                    <div>
+                      <h3 className="text-[20px] font-bold">{t}</h3>
+                      <p className="mt-1 text-[15px] leading-relaxed text-white/70">{b}</p>
+                    </div>
                   </div>
                 </Reveal>
               ))}
             </ul>
-          </div>
-        </section>
-
-        <section aria-labelledby="care" className="mx-auto max-w-6xl px-4 py-14 md:py-20">
-          <div className="grid items-center gap-10 md:grid-cols-2">
-            <div className="relative">
-              <Image
-                src="/photos/ward-consult.webp"
-                alt="A doctor reviews notes with a patient in a hospital ward"
-                width={1264}
-                height={848}
-                sizes="(min-width: 768px) 560px, 92vw"
-                className="aspect-[4/3] w-full rounded-3xl object-cover shadow-xl shadow-teal/10"
-              />
-              <Image
-                src="/photos/child-checkup.webp"
-                alt="A smiling boy has his chest checked with a stethoscope"
-                width={612}
-                height={408}
-                sizes="220px"
-                className="absolute -bottom-6 -right-2 hidden w-44 rounded-2xl border-4 border-white object-cover shadow-xl sm:block md:-right-6 md:w-52"
-              />
+            <div className="mt-10">
+              <PillLink href="/about" tone="light">
+                About Care Kin
+              </PillLink>
             </div>
-            <div>
-              <h2 id="care" className="text-[28px] font-bold leading-tight md:text-[34px]">
-                From the living room to the ward, everyone has the same picture
-              </h2>
-              <p className="mt-4 text-[17px] leading-relaxed text-muted-foreground">
-                Sickle cell care moves between home, caregivers and hospitals. Care Kin keeps the details travelling
-                with the patient, so nobody has to start from the beginning when a crisis hits.
+          </div>
+          <Reveal delay={150} className="relative">
+            <div className="relative aspect-[4/4.6] overflow-hidden rounded-[36px]">
+              <Image src="/photos/nurse-portrait.webp" alt="A smiling caregiver in blue scrubs" fill sizes="(min-width: 1024px) 520px, 92vw" className="object-cover object-top" />
+            </div>
+            <div className="absolute -bottom-6 left-4 right-4 rounded-3xl bg-white p-5 text-ink shadow-2xl md:left-8 md:right-auto md:max-w-sm">
+              <p className="flex items-center gap-2 text-[13px] font-semibold text-teal">
+                <Starburst className="size-4 text-[#E9785F]" /> Our promise
               </p>
-              <ul className="mt-6 space-y-3">
-                {[
-                  "Your health passport is ready to show at any hospital",
-                  "Family near and far see the same updates",
-                  "The nearest facility that treats SCD is one tap away",
-                ].map((t) => (
-                  <li key={t} className="flex items-start gap-3 text-[16px]">
-                    <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-mint text-teal">
-                      <Check className="size-4" aria-hidden />
-                    </span>
-                    {t}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </section>
-
-        <section aria-labelledby="carers" className="border-y-[1.5px] border-line bg-mint-soft">
-          <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-14 md:grid-cols-[1fr_1.1fr] md:py-20">
-            <div className="order-2 md:order-1">
-              <h2 id="carers" className="text-[28px] font-bold leading-tight md:text-[34px]">
-                Caregivers you can trust in your home
-              </h2>
-              <p className="mt-4 text-[17px] leading-relaxed text-muted-foreground">
-                Every caregiver is checked before they can take a booking. You pay into escrow, and the money is
-                released only after the care is done.
+              <p className="mt-2 text-[16px] font-semibold leading-snug">
+                No one living with sickle cell should face a crisis alone, or wait on a login to get help.
               </p>
-              <ul className="mt-6 grid gap-3 sm:grid-cols-2">
-                {[
-                  ["NIN verified", "Identity confirmed"],
-                  ["Guarantors", "People who vouch for them"],
-                  ["Background check", "Run before approval"],
-                  ["GPS check-in", "Proof they arrived"],
-                ].map(([t, s]) => (
-                  <li key={t} className="ck-card flex items-center gap-3 p-4">
-                    <BadgeCheck className="size-6 shrink-0 text-teal" aria-hidden />
-                    <span className="leading-tight">
-                      <span className="block font-bold">{t}</span>
-                      <span className="text-[14px] text-muted-foreground">{s}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <Button asChild size="lg" className="mt-7">
-                <Link href="/register">Find a caregiver</Link>
-              </Button>
             </div>
-            <div className="relative order-1 mx-auto w-full max-w-sm md:order-2 md:max-w-md">
-              <div aria-hidden className="absolute -inset-3 rotate-3 rounded-[36px] bg-teal/15" />
-              <Image
-                src="/photos/nurse-portrait.webp"
-                alt="A smiling caregiver in blue scrubs"
-                width={452}
-                height={678}
-                sizes="(min-width: 768px) 440px, 90vw"
-                className="relative aspect-[4/4.6] w-full rounded-[32px] border-[6px] border-white object-cover object-top shadow-2xl shadow-teal/20"
-              />
-              <div className="absolute -bottom-4 left-4 flex items-center gap-2 rounded-2xl border-[1.5px] border-line bg-white px-4 py-3 shadow-xl">
-                <ShieldCheck className="size-5 text-teal" aria-hidden />
-                <span className="text-[14px] font-bold">Vetted and trained</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section aria-labelledby="who" className="mx-auto max-w-5xl px-4 py-12">
-          <h2 id="who" className="text-[26px] font-bold">
-            Who is it for?
-          </h2>
-          <ul className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-            {AUDIENCE.map(([t, s]) => (
-              <li key={t}>
-                <Link href="/register" className="ck-card block h-full p-4 transition-colors hover:border-primary hover:bg-mint-soft">
-                  <span className="block text-[17px] font-bold">{t}</span>
-                  <span className="mt-1 block text-[15px] text-muted-foreground">{s}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section aria-label="Get started" className="mx-auto max-w-6xl px-4 pb-14">
-          <div className="relative overflow-hidden rounded-[32px] bg-[#075248] text-white">
-            <Image
-              src="/photos/ward-consult.webp"
-              alt=""
-              width={1264}
-              height={848}
-              sizes="(min-width: 1152px) 1152px, 100vw"
-              className="absolute inset-0 size-full object-cover"
-            />
-            <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-[#075248] via-[#075248]/90 to-[#075248]/50" />
-            <div className="relative max-w-xl px-6 py-12 md:px-12 md:py-16">
-              <h2 className="text-[28px] font-bold leading-tight md:text-[36px]">Be ready before the next crisis.</h2>
-              <p className="mt-3 text-[17px] text-white/85">
-                It takes about two minutes to create your account and set up your emergency contacts.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Button asChild size="lg" className="h-14 bg-white px-8 text-[17px] text-teal hover:bg-white/90">
-                  <Link href="/register">Create a free account</Link>
-                </Button>
-                <Button asChild size="lg" variant="outline" className="h-14 border-white/60 bg-transparent px-8 text-[17px] text-white hover:bg-white/10 hover:text-white">
-                  <Link href="/find-care">Find a facility</Link>
-                </Button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="mx-auto max-w-5xl px-4 pb-12">
-          <div className="flex items-start gap-3 rounded-xl bg-crisis-soft p-5">
-            <ShieldCheck className="mt-0.5 size-5 shrink-0 text-crisis-ink" aria-hidden />
-            <p className="text-body">
-              <span className="font-bold text-crisis-ink">CareKin is not an emergency service.</span> We don&apos;t give
-              medical advice. If breathing is hard or there is chest pain, call{" "}
-              <a href="tel:112" className="font-bold underline">
-                112
-              </a>{" "}
-              now.
-            </p>
-          </div>
-        </section>
-      </main>
-
-      <footer className="border-t-[1.5px] border-line bg-white">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-meta text-muted-foreground">
-          <p>© {new Date().getFullYear()} Care Kin. Consent is recorded under the Nigeria Data Protection Act.</p>
-          <Link href="/privacy" className="font-semibold text-teal underline">
-            Privacy
-          </Link>
+          </Reveal>
         </div>
-      </footer>
-    </div>
+      </section>
+
+      {/* ---------------------------------------------------------------- who it's for */}
+      <section aria-labelledby="who" className="mx-auto max-w-7xl px-4 pb-16 pt-24 md:px-6 md:pb-24">
+        <Reveal className="max-w-2xl">
+          <Eyebrow>Who it&apos;s for</Eyebrow>
+          <SectionTitle id="who" muted="near or far.">
+            For everyone in the circle of care,
+          </SectionTitle>
+        </Reveal>
+        <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {AUDIENCE.map(({ title, body, icon: Icon }, i) => (
+            <Reveal as="li" key={title} delay={i * 80}>
+              <Link
+                href="/register"
+                className="group flex h-full flex-col justify-between gap-8 rounded-[28px] bg-white p-6 ring-1 ring-line transition hover:-translate-y-1 hover:shadow-xl hover:shadow-teal/10"
+              >
+                <span className="flex size-12 items-center justify-center rounded-2xl bg-mint text-teal" aria-hidden>
+                  <Icon className="size-6" />
+                </span>
+                <span>
+                  <span className="block text-[19px] font-bold">{title}</span>
+                  <span className="mt-1 block text-[15px] text-ink/65">{body}</span>
+                </span>
+              </Link>
+            </Reveal>
+          ))}
+        </ul>
+      </section>
+
+      {/* ---------------------------------------------------------------- pricing note */}
+      <section aria-labelledby="pricing" className="mx-auto max-w-7xl px-4 pb-16 md:px-6 md:pb-24">
+        <Reveal className="grid gap-8 overflow-hidden rounded-[36px] bg-white p-7 ring-1 ring-line md:grid-cols-[1fr_1.1fr] md:p-12">
+          <div>
+            <Eyebrow>Pricing</Eyebrow>
+            <SectionTitle id="pricing" muted="Pay only for care.">
+              Free to join.
+            </SectionTitle>
+            <p className="mt-4 max-w-md text-[16px] leading-relaxed text-ink/70">
+              The crisis button, health passport and facility finder cost nothing. When you book a caregiver, you pay
+              their hourly rate into escrow, and it&apos;s released after the care is done.
+            </p>
+            <div className="mt-8">
+              <PillLink href="/register">Create a free account</PillLink>
+            </div>
+          </div>
+          <div className="rounded-[28px] bg-[#FAF8F5] p-6 ring-1 ring-line md:p-8">
+            <p className="text-[14px] font-semibold text-ink/60">Always free</p>
+            <p className="mt-1 text-[48px] font-bold leading-none">
+              ₦0<span className="text-[18px] font-medium text-ink/50"> / month</span>
+            </p>
+            <ul className="mt-6 space-y-3">
+              <Tick>One-tap crisis alerts and the nearest facility</Tick>
+              <Tick>Encrypted health passport and PDF export</Tick>
+              <Tick>Family and guardian access</Tick>
+              <Tick>Caregiver bookings paid per hour, through escrow</Tick>
+              <Tick>Pay with a card from any country</Tick>
+            </ul>
+          </div>
+        </Reveal>
+      </section>
+
+      {/* ---------------------------------------------------------------- FAQ */}
+      <section aria-labelledby="faq" className="mx-auto grid max-w-7xl gap-10 px-4 pb-16 md:px-6 md:pb-24 lg:grid-cols-[1fr_1.4fr]">
+        <Reveal>
+          <Eyebrow>FAQs</Eyebrow>
+          <SectionTitle id="faq" muted="answered.">
+            Your questions,
+          </SectionTitle>
+          <p className="mt-4 max-w-sm text-[16px] text-ink/70">Can&apos;t find what you need? Read every answer on the FAQ page.</p>
+          <div className="mt-8">
+            <PillLink href="/faq" tone="outline">
+              All FAQs
+            </PillLink>
+          </div>
+        </Reveal>
+        <Reveal delay={120}>
+          <FaqList items={FAQS.filter((f) => ["Do I have to sign in during a crisis?", "How are caregivers checked?", "How does payment work?", "Who can see my health information?"].includes(f.q))} />
+        </Reveal>
+      </section>
+
+      {/* ---------------------------------------------------------------- closing CTA */}
+      <section aria-label="Get started" className="mx-auto max-w-7xl px-4 pb-20 md:px-6">
+        <div className="relative overflow-hidden rounded-[40px] bg-[#0B2F2B] text-white">
+          <Image src="/photos/caregiver-home.webp" alt="" fill sizes="(min-width: 1280px) 1280px, 100vw" className="object-cover opacity-35" />
+          <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-[#0B2F2B] via-[#0B2F2B]/85 to-transparent" />
+          <div className="relative max-w-2xl px-7 py-14 md:px-14 md:py-20">
+            <Eyebrow light>Get started today</Eyebrow>
+            <h2 className="mt-5 text-[36px] font-bold leading-[1.05] tracking-tight md:text-[56px]">
+              Be ready before the next crisis.
+            </h2>
+            <p className="mt-4 text-[17px] text-white/75">
+              It takes about two minutes to create your account and choose who to alert.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <PillLink href="/register" tone="light">
+                Join Care Kin
+              </PillLink>
+              <PillLink href="/find-care" tone="teal">
+                Find a facility
+              </PillLink>
+            </div>
+          </div>
+        </div>
+      </section>
+    </MarketingShell>
   );
 }

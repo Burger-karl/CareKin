@@ -74,7 +74,7 @@ export function MessagesView() {
         icon={MessageCircle}
         tone="green"
         action={
-          <Link href="/settings" aria-label="Settings" className="rounded-full bg-white/15 p-2.5 text-white transition hover:bg-white/25">
+          <Link href="/settings" aria-label="Settings" className="rounded-full bg-mint p-2.5 text-teal transition hover:bg-[#cfe6e2]">
             <Settings className="size-6" />
           </Link>
         }

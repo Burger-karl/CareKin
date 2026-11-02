@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --background: 180 26% 96%;
+    --background: 40 33% 97%;
     --foreground: 200 39% 12%;
     --card: 0 0% 100%;
     --primary: 173 80% 29%;
@@ -42,7 +42,7 @@
 
 @layer components {
   .ck-card {
-    @apply rounded-xl border-[1.5px] border-line bg-white;
+    @apply rounded-[0.5rem] border border-slate-200 bg-white;
   }
   .ck-label {
     @apply text-[13px] font-semibold text-foreground;

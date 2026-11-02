@@ -174,3 +174,47 @@ def test_deployed_termii_needs_credentials():
 def test_sender_id_length_is_checked(sender):
     with pytest.raises(ValidationError):
         termii_settings(SMS_SENDER_ID=sender)
+
+
+async def test_the_channel_follows_the_setting():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"code": "ok", "message_id": "1"})
+
+    client = TermiiSMSClient(
+        termii_settings(SMS_TERMII_CHANNEL="generic"), transport=httpx.MockTransport(handler)
+    )
+    await client.send("+2348031234567", "test")
+    assert json.loads(seen[0].content)["channel"] == "generic"
+
+
+async def test_a_refusal_carries_termiis_reason():
+    client, _ = client_returning(
+        lambda _: httpx.Response(400, json={"message": "Sender ID not approved"})
+    )
+    with pytest.raises(SMSDeliveryError, match="Sender ID not approved"):
+        await client.send("+2348031234567", "test")
+
+
+async def test_a_refusal_without_json_still_raises():
+    client, _ = client_returning(lambda _: httpx.Response(502, text="Bad gateway"))
+    with pytest.raises(SMSDeliveryError, match="HTTP 502: no details"):
+        await client.send("+2348031234567", "test")
+
+
+def test_production_refuses_the_generic_channel():
+    with pytest.raises(ValidationError, match="SMS_TERMII_CHANNEL must be dnd"):
+        deployed(
+            "production",
+            SMS_PROVIDER="termii",
+            SMS_PROVIDER_API_KEY="k",
+            SMS_PROVIDER_BASE_URL=BASE_URL,
+            SMS_TERMII_CHANNEL="generic",
+        )
+
+
+def test_an_unknown_channel_is_rejected():
+    with pytest.raises(ValidationError):
+        termii_settings(SMS_TERMII_CHANNEL="whatsapp")

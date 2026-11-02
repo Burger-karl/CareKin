@@ -145,6 +145,11 @@ class Settings(BaseSettings):
     # Must be an approved Termii sender ID: crisis alerts use the DND channel, which needs one.
     SMS_SENDER_ID: str = Field(default="CareKin", min_length=3, max_length=11)
     SMS_TIMEOUT_SECONDS: float = Field(default=10.0, gt=0)
+    # Termii route. "dnd" reaches every number, including those on Nigeria's Do-Not-Disturb
+    # register, and is what OTPs and crisis alerts need; Termii must activate it on the account.
+    # "generic" is only for trying things out before that: it never reaches DND numbers and
+    # MTN holds it overnight. Production refuses "generic".
+    SMS_TERMII_CHANNEL: Literal["dnd", "generic"] = "dnd"
     WHATSAPP_ACCESS_TOKEN: SecretStr | None = None
     WHATSAPP_PHONE_NUMBER_ID: str | None = None
     WHATSAPP_VERIFY_TOKEN: SecretStr | None = None
@@ -304,6 +309,14 @@ class Settings(BaseSettings):
         if self.is_production and self.LLM_PROVIDER == "mock":
             problems.append(
                 "LLM_PROVIDER must not be mock in production: users would get canned text"
+            )
+        if (
+            self.is_production
+            and self.sms_provider == "termii"
+            and self.SMS_TERMII_CHANNEL != "dnd"
+        ):
+            problems.append(
+                "SMS_TERMII_CHANNEL must be dnd in production: generic never reaches DND numbers"
             )
         if self.sms_provider == "termii" and not (
             self.SMS_PROVIDER_API_KEY and self.SMS_PROVIDER_BASE_URL

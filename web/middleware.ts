@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 // Pages anyone can open. Everything else needs a session cookie; the API checks it for real.
-const PUBLIC = ["/login", "/register", "/privacy", "/find-care"];
+const PUBLIC = ["/login", "/register", "/privacy", "/find-care", "/about", "/how-it-works", "/faq"];
 
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;

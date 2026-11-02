@@ -29,7 +29,9 @@ const config: Config = {
         ground: "#F3F8F8",
         line: "#D3E5E3",
       },
-      fontFamily: { sans: ["var(--font-dm-sans)", "system-ui", "sans-serif"] },
+      fontFamily: { sans: ["var(--font-body)", "system-ui", "sans-serif"] },
+      // Lighter type, like the reference design: "bold" and "semibold" render as medium (500).
+      fontWeight: { semibold: "500", bold: "500", extrabold: "600" },
       borderRadius: { xl: "20px", "2xl": "24px", lg: "14px", md: "10px", sm: "6px" },
       fontSize: {
         meta: ["13px", "18px"],
