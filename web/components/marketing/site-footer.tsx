@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { Phone } from "lucide-react";
-import { LogoMark } from "@/components/brand";
+import { LogoFull } from "@/components/brand";
 import { Starburst } from "@/components/marketing/starburst";
 
 const COLUMNS = [
   {
-    title: "Care Kin",
+    title: "CareKin",
     links: [
       ["How it works", "/how-it-works"],
       ["About", "/about"],
@@ -32,11 +32,8 @@ export function SiteFooter() {
       <div className="mx-auto max-w-7xl px-4 pb-10 pt-14 md:px-6">
         <div className="grid gap-10 md:grid-cols-[1.3fr_2fr]">
           <div>
-            <Link href="/" className="inline-flex items-center gap-2" aria-label="Care Kin home">
-              <span className="rounded-xl bg-white p-1.5">
-                <LogoMark size={30} />
-              </span>
-              <span className="text-[24px] font-bold tracking-tight">Care Kin</span>
+            <Link href="/" className="inline-block rounded-2xl bg-white p-3" aria-label="CareKin home">
+              <LogoFull width={150} />
             </Link>
             <p className="mt-4 max-w-sm text-[15px] leading-relaxed text-white/70">
               Carer and patient, together. Crisis help, a health passport and vetted caregivers for people living with
@@ -69,8 +66,8 @@ export function SiteFooter() {
           </div>
         </div>
         <div className="mt-12 flex flex-col gap-3 border-t border-white/10 pt-6 text-[13px] text-white/55 md:flex-row md:items-center md:justify-between">
-          <p>© {new Date().getFullYear()} Care Kin. Consent is recorded under the Nigeria Data Protection Act.</p>
-          <p>Care Kin is not an emergency service and does not give medical advice.</p>
+          <p>© {new Date().getFullYear()} CareKin. Consent is recorded under the Nigeria Data Protection Act.</p>
+          <p>CareKin is not an emergency service and does not give medical advice.</p>
         </div>
       </div>
     </footer>

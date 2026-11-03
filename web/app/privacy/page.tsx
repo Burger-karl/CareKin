@@ -19,7 +19,7 @@ export default function PrivacyPage() {
       <main className="mx-auto max-w-xl space-y-6 px-5 py-8">
         <h1 className="text-title font-bold">Privacy</h1>
         <p className="text-muted-foreground">
-          What Care Kin collects, and why. Consent is recorded under the Nigeria Data Protection Act, and you can change it
+          What CareKin collects, and why. Consent is recorded under the Nigeria Data Protection Act, and you can change it
           any time in Settings.
         </p>
         <dl className="space-y-5">

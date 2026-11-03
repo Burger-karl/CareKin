@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bell, Maximize2, Menu as MenuIcon, Minimize2, Search, X, type LucideIcon } from "lucide-react";
 import * as Popover from "@radix-ui/react-dropdown-menu";
-import { LogoMark } from "@/components/brand";
+import { LogoMark, LogoWordmark } from "@/components/brand";
 import { appFont } from "@/lib/fonts";
 import { cn } from "@/lib/utils";
 
@@ -226,14 +226,12 @@ export function DashFrame({
         aria-label="Sidebar"
       >
         <div className="flex h-20 shrink-0 items-center justify-between px-6">
-          <Link href={homeHref} className="flex items-center gap-2.5" aria-label="Care Kin home">
-            <span className="rounded-lg bg-white p-1">
-              <LogoMark size={26} />
+          <Link href={homeHref} className="flex flex-col items-start gap-1" aria-label="CareKin home">
+            <span className="flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-1.5">
+              <LogoMark size={28} />
+              <LogoWordmark height={18} />
             </span>
-            <span className="leading-tight">
-              <span className="block text-[18px] font-[600] text-white">Care Kin</span>
-              <span className="block text-[12px] text-white/50">{product}</span>
-            </span>
+            <span className="pl-1 text-[12px] text-white/50">{product}</span>
           </Link>
           <button type="button" className="rounded-full p-2 text-white/70 hover:bg-white/10 lg:hidden" aria-label="Close menu" onClick={() => setOpen(false)}>
             <X className="size-5" />
@@ -300,7 +298,7 @@ export function DashFrame({
               <TopbarButton label="Open menu" className="lg:hidden" onClick={() => setOpen(true)}>
                 <MenuIcon className="size-5" />
               </TopbarButton>
-              <Link href={homeHref} className="md:hidden" aria-label="Care Kin home">
+              <Link href={homeHref} className="md:hidden" aria-label="CareKin home">
                 <LogoMark size={30} />
               </Link>
               <QuickFind items={allItems} />

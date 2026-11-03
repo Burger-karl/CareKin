@@ -27,12 +27,12 @@ function FamilyCard({ userId }: { userId: string }) {
       <div>
         <h1 className="text-title font-bold leading-tight">Follow a family member</h1>
         <p className="mt-2 text-muted-foreground">
-          The person you support adds you from their Care Kin account. Send them your Care Kin ID below. You&apos;ll see
+          The person you support adds you from their CareKin account. Send them your CareKin ID below. You&apos;ll see
           only what they choose to share.
         </p>
       </div>
       <div className="ck-card space-y-3 p-5">
-        <p className="ck-label">Your Care Kin ID</p>
+        <p className="ck-label">Your CareKin ID</p>
         <code className="block break-all rounded-lg bg-mint-soft px-3 py-3 text-[15px]">{userId}</code>
         <Button
           variant="secondary"

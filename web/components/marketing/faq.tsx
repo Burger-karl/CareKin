@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 export const FAQS: { q: string; a: string; group: "Getting started" | "Crisis help" | "Caregivers & payment" | "Privacy" }[] = [
   {
     group: "Getting started",
-    q: "Who is Care Kin for?",
+    q: "Who is CareKin for?",
     a: "People living with sickle cell, parents and guardians of children with sickle cell, family members abroad who fund and follow care, and caregivers who want to work with them.",
   },
   {
@@ -24,12 +24,12 @@ export const FAQS: { q: string; a: string; group: "Getting started" | "Crisis he
   {
     group: "Crisis help",
     q: "Do I have to sign in during a crisis?",
-    a: "No, if you set up your phone beforehand. Turn on one-tap crisis once while signed in. After that, holding the button on the Care Kin home page alerts your family without signing in or waiting for a code.",
+    a: "No, if you set up your phone beforehand. Turn on one-tap crisis once while signed in. After that, holding the button on the CareKin home page alerts your family without signing in or waiting for a code.",
   },
   {
     group: "Crisis help",
-    q: "Is Care Kin an emergency service?",
-    a: "No. Care Kin alerts the people you trust and points you to care. It does not give medical advice. If breathing is hard or there is chest pain, call 112 straight away.",
+    q: "Is CareKin an emergency service?",
+    a: "No. CareKin alerts the people you trust and points you to care. It does not give medical advice. If breathing is hard or there is chest pain, call 112 straight away.",
   },
   {
     group: "Caregivers & payment",

@@ -175,5 +175,5 @@ export function PageHeader({
   icon?: LucideIcon;
   tone?: string;
 }) {
-  return <DashTitle title={title} subtitle={subtitle} crumbs={["Care Kin"]} action={action} />;
+  return <DashTitle title={title} subtitle={subtitle} crumbs={["CareKin"]} action={action} />;
 }
