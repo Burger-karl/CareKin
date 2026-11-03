@@ -105,7 +105,7 @@ export default function Landing() {
       {/* ---------------------------------------------------------------- benefits */}
       <section aria-labelledby="benefits" className="mx-auto max-w-7xl px-4 py-16 md:px-6 md:py-24">
         <Reveal className="max-w-3xl">
-          <Eyebrow>Why Care Kin</Eyebrow>
+          <Eyebrow>Why CareKin</Eyebrow>
           <SectionTitle id="benefits" muted="for every day and every crisis.">
             Everything you need to stay ahead,
           </SectionTitle>
@@ -141,7 +141,7 @@ export default function Landing() {
             <div>
               <h3 className="text-[26px] font-bold leading-tight">From the living room to the ward</h3>
               <p className="mt-3 text-[16px] leading-relaxed text-ink/70">
-                Sickle cell care moves between home, caregivers and hospitals. Care Kin keeps the details travelling with
+                Sickle cell care moves between home, caregivers and hospitals. CareKin keeps the details travelling with
                 the patient, so nobody starts from the beginning when a crisis hits.
               </p>
               <ul className="mt-6 space-y-3.5">
@@ -259,7 +259,7 @@ export default function Landing() {
             </ul>
             <div className="mt-10">
               <PillLink href="/about" tone="light">
-                About Care Kin
+                About CareKin
               </PillLink>
             </div>
           </div>
@@ -373,7 +373,7 @@ export default function Landing() {
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <PillLink href="/register" tone="light">
-                Join Care Kin
+                Join CareKin
               </PillLink>
               <PillLink href="/find-care" tone="teal">
                 Find a facility

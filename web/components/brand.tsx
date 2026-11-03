@@ -1,32 +1,72 @@
+import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-export function Logo({ className, sub, href = "/" }: { className?: string; sub?: string; href?: string }) {
+// public/brand/*.png are cut from the source logo by scripts/make-brand-assets.mjs.
+const MARK_RATIO = 256 / 284; // width / height
+const WORD_RATIO = 520 / 119;
+
+/** The heart mark: carer and patient forming a heart. */
+export function LogoMark({ size = 36, className }: { size?: number; className?: string }) {
   return (
-    <Link href={href} className={cn("inline-flex items-center gap-2", className)} aria-label="Care Kin home">
-      <LogoMark />
-      <span className="text-[22px] font-bold tracking-tight">
-        <span className="text-teal">Care</span> <span className="text-ink">Kin</span>
-      </span>
+    <Image
+      src="/brand/mark.png"
+      alt=""
+      aria-hidden
+      width={Math.round(size * MARK_RATIO)}
+      height={size}
+      className={cn("shrink-0", className)}
+      style={{ width: Math.round(size * MARK_RATIO), height: size }}
+    />
+  );
+}
+
+/** The "CareKin" lettering, exactly as in the logo. */
+export function LogoWordmark({ height = 22, className }: { height?: number; className?: string }) {
+  return (
+    <Image
+      src="/brand/wordmark.png"
+      alt="CareKin"
+      width={Math.round(height * WORD_RATIO)}
+      height={height}
+      className={cn("shrink-0", className)}
+      style={{ width: Math.round(height * WORD_RATIO), height }}
+    />
+  );
+}
+
+/** Mark and lettering side by side, linking home. */
+export function Logo({
+  className,
+  sub,
+  href = "/",
+  size = 36,
+}: {
+  className?: string;
+  sub?: string;
+  href?: string;
+  /** Height of the mark in pixels; the lettering scales with it. */
+  size?: number;
+}) {
+  return (
+    <Link href={href} className={cn("inline-flex items-center gap-2", className)} aria-label="CareKin home">
+      <LogoMark size={size} />
+      <LogoWordmark height={Math.round(size * 0.62)} />
       {sub && <span className="text-[13px] font-medium text-muted-foreground">{sub}</span>}
     </Link>
   );
 }
 
-/** The heart mark, cropped from the full logo (public/logo.jpg) with CSS. */
-export function LogoMark({ size = 36 }: { size?: number }) {
-  const bg = size / 0.43;
+/** The full logo with the tagline "Carer and patient together". */
+export function LogoFull({ width = 220, className }: { width?: number; className?: string }) {
   return (
-    <span
-      aria-hidden
-      className="inline-block shrink-0 bg-no-repeat"
-      style={{
-        width: size,
-        height: size * 1.14,
-        backgroundImage: "url(/logo.jpg)",
-        backgroundSize: `${bg}px ${bg}px`,
-        backgroundPosition: `${-0.29 * bg}px ${-0.13 * bg}px`,
-      }}
+    <Image
+      src="/brand/logo.png"
+      alt="CareKin: Carer and patient together"
+      width={width}
+      height={width}
+      className={cn("h-auto", className)}
+      style={{ width, height: "auto" }}
     />
   );
 }

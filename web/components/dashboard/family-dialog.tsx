@@ -102,7 +102,7 @@ export function FamilyDialog({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!UUID.test(userId.trim())) return setError("That doesn't look like a Care Kin ID. Ask them to copy it from their sign-up screen.");
+    if (!UUID.test(userId.trim())) return setError("That doesn't look like a CareKin ID. Ask them to copy it from their sign-up screen.");
     add.mutate();
   }
 
@@ -120,7 +120,7 @@ export function FamilyDialog({
         </ul>
 
         <form onSubmit={submit} className="space-y-3" noValidate>
-          <Field label="Add by Care Kin ID" htmlFor="family-id" error={error} hint="They can copy their ID when they sign up as family.">
+          <Field label="Add by CareKin ID" htmlFor="family-id" error={error} hint="They can copy their ID when they sign up as family.">
             <Input
               id="family-id"
               value={userId}

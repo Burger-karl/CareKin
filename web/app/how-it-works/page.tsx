@@ -18,7 +18,7 @@ const STEPS = [
   {
     n: "02",
     title: "Turn on one-tap crisis",
-    body: "Once, while you're calm, turn on one-tap crisis for your phone. In a crisis, hold the button on the Care Kin home page: your family and caregiver are alerted with your location, no sign-in needed.",
+    body: "Once, while you're calm, turn on one-tap crisis for your phone. In a crisis, hold the button on the CareKin home page: your family and caregiver are alerted with your location, no sign-in needed.",
     points: ["Hold for 2 seconds, 5 seconds to cancel", "Works offline and sends when you reconnect", "Shows the nearest SCD facility"],
     mock: <CrisisMock />,
   },
@@ -52,7 +52,7 @@ export default function HowItWorks() {
         eyebrow="How it works"
         title="Sickle cell care,"
         muted="step by step."
-        intro="From setting up your profile to the moment a crisis hits, here is what Care Kin does for you and the people who look after you."
+        intro="From setting up your profile to the moment a crisis hits, here is what CareKin does for you and the people who look after you."
       >
         <PillLink href="/register">Create a free account</PillLink>
         <PillLink href="/find-care" tone="outline">
@@ -88,7 +88,7 @@ export default function HowItWorks() {
           </SectionTitle>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <PillLink href="/register" tone="light">
-              Join Care Kin
+              Join CareKin
             </PillLink>
           </div>
         </div>

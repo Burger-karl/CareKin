@@ -12,17 +12,17 @@ const VALUES = [
   ["Safety first", "A crisis should never wait on a password or a code. Help comes first, paperwork later."],
   ["Trust is earned", "Every caregiver is checked by a person before they can take a booking, and every payment waits in escrow."],
   ["Your data is yours", "Health details are encrypted and shared only when you say so, for as long as you say."],
-  ["Honest about limits", "Care Kin connects you to people and places. It never gives medical advice or replaces emergency care."],
+  ["Honest about limits", "CareKin connects you to people and places. It never gives medical advice or replaces emergency care."],
 ];
 
 export default function About() {
   return (
     <MarketingShell>
       <PageHero
-        eyebrow="About Care Kin"
+        eyebrow="About CareKin"
         title="Carer and patient,"
         muted="together."
-        intro="Care Kin is a care marketplace and safety layer for people living with sickle cell in Nigeria, their families near and far, and the caregivers who support them."
+        intro="CareKin is a care marketplace and safety layer for people living with sickle cell in Nigeria, their families near and far, and the caregivers who support them."
       />
 
       <section className="mx-auto grid max-w-7xl gap-6 px-4 pb-16 md:px-6 lg:grid-cols-2">
@@ -34,7 +34,7 @@ export default function About() {
           <SectionTitle className="md:text-[40px]">A crisis shouldn&apos;t be faced alone</SectionTitle>
           <p className="mt-4 text-[16px] leading-relaxed text-ink/70">
             Sickle cell crises are sudden and painful. In those moments, families lose time finding the right hospital,
-            explaining a medical history from memory, or reaching the people who need to know. Care Kin puts all of that
+            explaining a medical history from memory, or reaching the people who need to know. CareKin puts all of that
             behind one button.
           </p>
           <ul className="mt-6 space-y-3">

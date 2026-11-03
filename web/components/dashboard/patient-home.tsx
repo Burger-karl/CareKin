@@ -267,7 +267,7 @@ export function PatientHome() {
       <DashTitle
         title="Dashboard"
         subtitle={`${greeting()}, ${firstName(me.full_name)} · ${formatLongDate()}${isSelf ? "" : ` · Caring for ${firstName(patient.full_name)}`}`}
-        crumbs={["Care Kin", "Menu"]}
+        crumbs={["CareKin", "Menu"]}
       />
 
       <DeviceSetupCard />

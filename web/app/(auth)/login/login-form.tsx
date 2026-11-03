@@ -96,7 +96,7 @@ export function LoginForm() {
       )}
 
       <p className="text-center text-body text-muted-foreground">
-        New to Care Kin?{" "}
+        New to CareKin?{" "}
         <Link href="/register" className="font-semibold text-teal underline">
           Create an account
         </Link>

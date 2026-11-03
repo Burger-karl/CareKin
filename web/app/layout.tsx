@@ -7,9 +7,9 @@ const golos = Golos_Text({ subsets: ["latin"], variable: "--font-body", display:
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
-  title: { default: "Care Kin", template: "%s · Care Kin" },
+  title: { default: "CareKin", template: "%s · CareKin" },
   description: "Care marketplace and safety layer for people living with sickle cell disease.",
-  applicationName: "Care Kin",
+  applicationName: "CareKin",
   manifest: "/manifest.webmanifest",
   robots: { index: false, follow: false },
 };

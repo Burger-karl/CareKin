@@ -38,11 +38,11 @@ function NoLink({ id }: { id: string }) {
     <div className="mx-auto max-w-md space-y-4">
       <h1 className="text-[28px] font-bold">Waiting to be linked</h1>
       <p className="text-muted-foreground">
-        The person you support adds you from their Care Kin account. Send them your Care Kin ID. You&apos;ll see only what
+        The person you support adds you from their CareKin account. Send them your CareKin ID. You&apos;ll see only what
         they choose to share.
       </p>
       <div className="ck-card space-y-3 p-5">
-        <p className="ck-label">Your Care Kin ID</p>
+        <p className="ck-label">Your CareKin ID</p>
         <code className="block break-all rounded-lg bg-mint-soft px-3 py-3 text-[15px]">{id}</code>
         <Button
           variant="secondary"
