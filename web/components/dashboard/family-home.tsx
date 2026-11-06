@@ -33,22 +33,22 @@ function ShareRow({ label, on }: { label: string; on: boolean }) {
   );
 }
 
-function NoLink({ phone }: { phone: string }) {
+function NoLink({ id }: { id: string }) {
   return (
     <div className="mx-auto max-w-md space-y-4 py-6">
       <h1 className="text-[28px] font-bold">Waiting to be linked</h1>
       <p className="text-muted-foreground">
-        Ask the person you support to add you as an emergency contact with this phone number, then turn on app access in
-        their Settings. You&apos;ll see only what they choose to share.
+        Send your CareKin ID to the person you support. They add you as an emergency contact in their Settings and enter
+        this ID to give you app access. You&apos;ll see only what they choose to share.
       </p>
       <div className="ck-card space-y-3 p-5">
-        <p className="ck-label">Your phone number</p>
-        <code className="block break-all rounded-lg bg-mint-soft px-3 py-3 text-[15px]">{phone}</code>
+        <p className="ck-label">Your CareKin ID</p>
+        <code className="block break-all rounded-lg bg-mint-soft px-3 py-3 text-[15px]">{id}</code>
         <Button
           variant="secondary"
-          onClick={() => navigator.clipboard.writeText(phone).then(() => toast.success("Copied."), () => toast.error("Copy failed."))}
+          onClick={() => navigator.clipboard.writeText(id).then(() => toast.success("Copied."), () => toast.error("Copy failed."))}
         >
-          <Copy /> Copy number
+          <Copy /> Copy ID
         </Button>
       </div>
     </div>
@@ -117,7 +117,7 @@ export function FamilyHome() {
     return { paidOut, awaiting, inEscrow, funded: [...funded.entries()], updates: updates.slice(0, 4) };
   }, [mine, shiftQs, moneyQs]);
 
-  if (!patient) return <NoLink phone={me.phone} />;
+  if (!patient) return <NoLink id={me.id} />;
 
   const loading = bookings.isPending || shiftQs.some((q) => q.isPending) || moneyQs.some((q) => q.isPending);
   const total = stats.paidOut + stats.awaiting + stats.inEscrow;

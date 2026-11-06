@@ -18,6 +18,8 @@ import { keys, useContacts, useFamilyLinks } from "@/lib/api/queries";
 import type { EmergencyContact, FamilyLink } from "@/lib/types";
 import { cn, humanize, initials, telHref, toE164 } from "@/lib/utils";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const CHANNEL: Record<EmergencyContact["channel"], string> = { sms: "SMS", whatsapp: "WhatsApp", push: "App notification" };
 
 function useRefresh(patientId: string) {
@@ -80,18 +82,16 @@ function AccessControls({ link, patientId }: { link: FamilyLink; patientId: stri
 function ContactDialog({
   patientId,
   contact,
-  nextPriority,
   open,
   onOpenChange,
 }: {
   patientId: string;
   contact: EmergencyContact | null;
-  nextPriority: number;
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
   const refresh = useRefresh(patientId);
-  const [form, setForm] = useState({ name: "", phone: "", relationship: "", channel: "sms" as EmergencyContact["channel"], priority: 1 });
+  const [form, setForm] = useState({ name: "", phone: "", relationship: "", channel: "sms" as EmergencyContact["channel"] });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [lastOpen, setLastOpen] = useState(false);
   // Reset the form each time the dialog opens.
@@ -100,8 +100,8 @@ function ContactDialog({
     setErrors({});
     setForm(
       contact
-        ? { name: contact.name, phone: contact.phone, relationship: humanize(contact.relationship), channel: contact.channel, priority: contact.priority }
-        : { name: "", phone: "", relationship: "", channel: "sms", priority: nextPriority },
+        ? { name: contact.name, phone: contact.phone, relationship: humanize(contact.relationship), channel: contact.channel }
+        : { name: "", phone: "", relationship: "", channel: "sms" },
     );
   } else if (!open && lastOpen) {
     setLastOpen(false);
@@ -114,7 +114,6 @@ function ContactDialog({
         phone: toE164(form.phone),
         relationship: form.relationship.trim().toLowerCase() || "contact",
         channel: form.channel,
-        priority: form.priority,
       };
       return contact
         ? api(`patients/${patientId}/emergency-contacts/${contact.id}`, { method: "PATCH", body })
@@ -147,13 +146,13 @@ function ContactDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{contact ? "Edit contact" : "Add emergency contact"}</DialogTitle>
-          <DialogDescription>Alerted with your location when the crisis button is pressed.</DialogDescription>
+          <DialogDescription>Everyone on your list is alerted at the same time, with your location, when the crisis button is pressed.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4" noValidate>
           <Field label="Name" htmlFor="ec-name" error={errors.name}>
             <Input id="ec-name" value={form.name} onChange={set("name")} aria-invalid={!!errors.name} />
           </Field>
-          <Field label="Phone" htmlFor="ec-phone" error={errors.phone} hint="The number their CareKin account uses, if they have one.">
+          <Field label="Phone" htmlFor="ec-phone" error={errors.phone}>
             <Input id="ec-phone" type="tel" inputMode="tel" value={form.phone} onChange={set("phone")} placeholder="0803 123 4567" aria-invalid={!!errors.phone} />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -168,16 +167,6 @@ function ContactDialog({
               </Select>
             </Field>
           </div>
-          <Field label="Alert order" htmlFor="ec-priority" hint="1 is alerted first." error={errors.priority}>
-            <Input
-              id="ec-priority"
-              type="number"
-              min={1}
-              max={99}
-              value={form.priority}
-              onChange={(e) => setForm((f) => ({ ...f, priority: Math.max(1, Math.min(99, Number(e.target.value) || 1)) }))}
-            />
-          </Field>
           <Button type="submit" className="w-full" loading={save.isPending}>
             {contact ? "Save contact" : "Add contact"}
           </Button>
@@ -202,29 +191,47 @@ function ContactTile({
   onRemove: () => void;
 }) {
   const refresh = useRefresh(patientId);
+  const [asking, setAsking] = useState(false);
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const grant = useMutation({
     mutationFn: () =>
       api(`patients/${patientId}/family-links`, {
-        body: { emergency_contact_id: contact.id, share_scope: { health_data: false, location: false }, can_fund: false },
+        body: {
+          user_id: code.trim(),
+          emergency_contact_id: contact.id,
+          share_scope: { health_data: false, location: false },
+          can_fund: false,
+        },
       }),
     onSuccess: () => {
       setError(null);
+      setAsking(false);
+      setCode("");
       toast.success(`${contact.name} can now follow care in the app. Choose what they see.`);
       void refresh();
     },
-    onError: (e) => setError(errorMessage(e)),
+    onError: (e) =>
+      setError(
+        e instanceof ApiError && e.code === "patient_conflict"
+          ? "That ID isn't a CareKin account, or it already has access. Check it with them."
+          : errorMessage(e),
+      ),
   });
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!UUID.test(code.trim())) return setError("That doesn't look like a CareKin ID. Ask them to copy it from their app.");
+    setError(null);
+    grant.mutate();
+  }
 
   return (
     <li className="flex flex-col rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex items-start gap-3">
         <Avatar label={initials(contact.name)} tone={toneFor(contact.name)} className="size-10 text-sm" />
         <div className="min-w-0 flex-1">
-          <p className="flex flex-wrap items-center gap-x-2 font-[600] text-slate-800">
-            {contact.name}
-            <span className="text-xs font-medium text-slate-400">#{contact.priority}</span>
-          </p>
+          <p className="truncate font-[600] text-slate-800">{contact.name}</p>
           <p className="text-sm">{humanize(contact.relationship)}</p>
           <a href={telHref(contact.phone)} className="mt-0.5 inline-flex items-center gap-1 text-sm text-teal hover:underline">
             <Phone className="size-3.5" aria-hidden /> {contact.phone}
@@ -255,14 +262,43 @@ function ContactTile({
         ) : (
           <>
             <p className="text-sm">Gets crisis alerts only. With app access they can follow care from their own CareKin account.</p>
-            {error && (
-              <p role="alert" className="mt-2 text-sm font-medium text-crisis-ink">
-                {error}
-              </p>
+            {asking ? (
+              <form onSubmit={submit} className="mt-3 space-y-2" noValidate>
+                <Field label="Their CareKin ID" htmlFor={`code-${contact.id}`} error={error} hint="They copy it from the app after signing up as family.">
+                  <Input
+                    id={`code-${contact.id}`}
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    placeholder="e.g. 3f2b…"
+                    autoComplete="off"
+                    aria-invalid={!!error}
+                    className="h-11"
+                    autoFocus
+                  />
+                </Field>
+                <div className="flex gap-2">
+                  <Button type="submit" size="sm" loading={grant.isPending}>
+                    Give access
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setAsking(false);
+                      setCode("");
+                      setError(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <Button variant="secondary" size="sm" className="mt-3" onClick={() => setAsking(true)}>
+                Give app access
+              </Button>
             )}
-            <Button variant="secondary" size="sm" className="mt-3" loading={grant.isPending} onClick={() => grant.mutate()}>
-              Give app access
-            </Button>
           </>
         )}
       </div>
@@ -309,7 +345,7 @@ export function ContactsCard({ patientId, className }: { patientId: string; clas
             </span>
             Emergency contacts &amp; family access
           </CardTitle>
-          <p className="ck-meta mt-1">Alerted in a crisis, in this order. Give a contact app access to let them follow care from their own CareKin account.</p>
+          <p className="ck-meta mt-1">Everyone here is alerted at the same time in a crisis. Give a contact app access with their CareKin ID to let them follow care from their own account.</p>
         </div>
         <Button size="sm" onClick={() => openDialog(null)}>
           <Plus /> Add contact
@@ -337,7 +373,7 @@ export function ContactsCard({ patientId, className }: { patientId: string; clas
       {others.length > 0 && (
         <div className="mt-6">
           <p className="mb-1 text-sm font-[600] text-slate-800">Other people with app access</p>
-          <p className="ck-meta mb-3">Added before access was linked to contacts. Add them as a contact to get their crisis alerts too.</p>
+          <p className="ck-meta mb-3">Not linked to an emergency contact, so they don&apos;t get crisis alerts.</p>
           <ul className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
             {others.map((l) => (
               <li key={l.id} className="rounded-xl border border-slate-200 bg-white p-4">
@@ -358,7 +394,6 @@ export function ContactsCard({ patientId, className }: { patientId: string; clas
       <ContactDialog
         patientId={patientId}
         contact={editing}
-        nextPriority={Math.min(99, Math.max(0, ...list.map((c) => c.priority)) + 1)}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
       />

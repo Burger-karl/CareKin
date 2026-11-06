@@ -20,7 +20,7 @@ const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
 type Errors = Record<string, string>;
 
-function FamilyCard({ phone }: { phone: string }) {
+function FamilyCard({ userId }: { userId: string }) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   return (
@@ -28,26 +28,26 @@ function FamilyCard({ phone }: { phone: string }) {
       <div>
         <h1 className="text-title font-bold leading-tight">Follow a family member</h1>
         <p className="mt-2 text-muted-foreground">
-          Ask the person you support to add you as an emergency contact with this phone number, then turn on app access
-          in their Settings. You&apos;ll see only what they choose to share.
+          Send your CareKin ID to the person you support. They add you as an emergency contact in their Settings and
+          enter this ID to give you app access. You&apos;ll see only what they choose to share.
         </p>
       </div>
       <div className="ck-card space-y-3 p-5">
-        <p className="ck-label">Your phone number</p>
-        <code className="block break-all rounded-lg bg-mint-soft px-3 py-3 text-[15px]">{phone}</code>
+        <p className="ck-label">Your CareKin ID</p>
+        <code className="block break-all rounded-lg bg-mint-soft px-3 py-3 text-[15px]">{userId}</code>
         <Button
           variant="secondary"
           onClick={async () => {
             try {
-              await navigator.clipboard.writeText(phone);
+              await navigator.clipboard.writeText(userId);
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             } catch {
-              toast.error("Copy failed. Select the number and copy it.");
+              toast.error("Copy failed. Select the ID and copy it.");
             }
           }}
         >
-          {copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy number"}
+          {copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy ID"}
         </Button>
       </div>
       <Button
@@ -109,7 +109,7 @@ export function SetupFlow() {
   }, [me.data, isChild]);
 
   if (!me.data || patients.isPending) return <PageSpinner />;
-  if (mode === "family" && isChild) return <FamilyCard phone={me.data.phone} />;
+  if (mode === "family" && isChild) return <FamilyCard userId={me.data.id} />;
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));

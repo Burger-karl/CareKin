@@ -222,12 +222,11 @@ def _check_share_scope(scope: dict[str, bool] | None) -> None:
 class FamilyLinkCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    user_id: uuid.UUID | None = Field(
-        default=None, description="The family member's CareKin account."
+    user_id: uuid.UUID = Field(
+        description="The family member's CareKin ID, which they share with the patient."
     )
     emergency_contact_id: uuid.UUID | None = Field(
-        default=None,
-        description="Grant access to the CareKin account that uses this emergency contact's phone.",
+        default=None, description="The emergency contact this person is, if any."
     )
     share_scope: dict[str, bool] = Field(
         default_factory=dict,
@@ -237,8 +236,6 @@ class FamilyLinkCreate(BaseModel):
 
     @model_validator(mode="after")
     def _check(self) -> FamilyLinkCreate:
-        if (self.user_id is None) == (self.emergency_contact_id is None):
-            raise ValueError("Give exactly one of user_id or emergency_contact_id")
         _check_share_scope(self.share_scope)
         return self
 

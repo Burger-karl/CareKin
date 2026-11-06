@@ -65,7 +65,6 @@ export function CarerShell({ children }: { children: React.ReactNode }) {
   return (
     <DashFrame
       homeHref="/carer"
-      product="Caregiver"
       sections={SECTIONS}
       topbar={
         <>

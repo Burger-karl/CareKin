@@ -134,9 +134,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <DashFrame
       homeHref={me.role === "facility_admin" ? "/facility" : "/dashboard"}
-      product={
-        me.role === "facility_admin" ? "Facility" : me.role === "family_abroad" ? "Family" : me.role === "guardian" ? "Guardian" : "Patient"
-      }
       sections={sections}
       sidebarFooter={
         showCrisis && (

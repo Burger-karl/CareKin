@@ -643,19 +643,11 @@ async def add_family_link(
 ) -> FamilyLinkRead:
     access = await get_access(db, patient_id, actor.user_id)
     _require_manage(access)
-    fields = data.model_dump()
     if data.emergency_contact_id is not None:
-        contact = await _get_contact(db, patient_id, data.emergency_contact_id)
-        user = await db.scalar(select(User).where(User.phone == contact.phone))
-        if user is None:
-            raise PatientRuleViolation(
-                f"No CareKin account uses {contact.phone} yet. "
-                f"Ask {contact.name} to sign up with this number, then try again."
-            )
-        fields["user_id"] = user.id
-    if fields["user_id"] == access.patient.user_id:
+        await _get_contact(db, patient_id, data.emergency_contact_id)
+    if data.user_id == access.patient.user_id:
         raise PatientRuleViolation("A patient can't be linked to themselves")
-    link = FamilyLink(patient_id=patient_id, **fields)
+    link = FamilyLink(patient_id=patient_id, **data.model_dump())
     db.add(link)
     _audit(
         db,

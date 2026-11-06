@@ -127,7 +127,6 @@ export function NotificationsButton({ notices, empty = "Nothing needs your atten
  */
 export function DashFrame({
   homeHref,
-  product,
   sections,
   sidebarFooter,
   topbar,
@@ -135,8 +134,6 @@ export function DashFrame({
   children,
 }: {
   homeHref: string;
-  /** Shown under the logo, e.g. "Patient app" or "Operations". */
-  product: string;
   sections: DashNavSection[];
   sidebarFooter?: React.ReactNode;
   /** Buttons on the right of the top bar, before the account menu. Include the account menu last. */
@@ -183,14 +180,15 @@ export function DashFrame({
         aria-label="Sidebar"
       >
         <div className={cn("flex h-20 shrink-0 items-center justify-between px-6", collapsed && "lg:justify-center lg:px-0")}>
-          <Link href={homeHref} className="flex flex-col items-start gap-1" aria-label="CareKin home">
-            <span className={cn("flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-1.5", collapsed && "lg:px-1.5")}>
-              <LogoMark size={28} />
-              <span className={cn(collapsed && "lg:hidden")}>
-                <LogoWordmark height={18} />
-              </span>
+          <Link
+            href={homeHref}
+            className={cn("flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-1.5", collapsed && "lg:px-1.5")}
+            aria-label="CareKin home"
+          >
+            <LogoMark size={28} />
+            <span className={cn(collapsed && "lg:hidden")}>
+              <LogoWordmark height={18} />
             </span>
-            <span className={cn("pl-1 text-[12px] text-white/50", collapsed && "lg:hidden")}>{product}</span>
           </Link>
           <button type="button" className="rounded-full p-2 text-white/70 hover:bg-white/10 lg:hidden" aria-label="Close menu" onClick={() => setOpen(false)}>
             <X className="size-5" />
