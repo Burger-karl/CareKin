@@ -43,7 +43,6 @@ export function OpsShell({ children }: { children: React.ReactNode }) {
   return (
     <DashFrame
       homeHref="/ops"
-      product="Operations"
       sections={sections}
       topbar={
         <>

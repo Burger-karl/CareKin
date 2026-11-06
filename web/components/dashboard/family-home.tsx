@@ -35,11 +35,11 @@ function ShareRow({ label, on }: { label: string; on: boolean }) {
 
 function NoLink({ id }: { id: string }) {
   return (
-    <div className="mx-auto max-w-md space-y-4">
+    <div className="mx-auto max-w-md space-y-4 py-6">
       <h1 className="text-[28px] font-bold">Waiting to be linked</h1>
       <p className="text-muted-foreground">
-        The person you support adds you from their CareKin account. Send them your CareKin ID. You&apos;ll see only what
-        they choose to share.
+        Send your CareKin ID to the person you support. They add you as an emergency contact in their Settings and enter
+        this ID to give you app access. You&apos;ll see only what they choose to share.
       </p>
       <div className="ck-card space-y-3 p-5">
         <p className="ck-label">Your CareKin ID</p>
@@ -127,77 +127,81 @@ export function FamilyHome() {
   const name = firstName(patient.full_name);
 
   return (
-    <div className="mx-auto max-w-xl">
+    <div>
       <p className="text-body text-muted-foreground">Hello {firstName(me.full_name)}</p>
       <h1 className="mb-5 text-[30px] font-bold leading-9">{name}&apos;s week</h1>
 
-      <div className="space-y-5">
-        <Card tone="mint" delay={0} lift>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-teal">Care funded this month</CardTitle>
-            <span className="ck-meta">via Paystack or Stripe</span>
-          </div>
-          {loading ? (
-            <Skeleton className="mt-3 h-10 w-40" />
-          ) : (
-            <p className="mt-3 text-[34px] font-bold leading-10 text-teal">
-              {stats.funded.length > 0 ? stats.funded.map(([c, m]) => formatMoney(m, c)).join(" + ") : formatMoney(0, "NGN")}
-            </p>
-          )}
-          <div className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-white" role="img" aria-label={`${stats.paidOut} paid out, ${stats.awaiting} awaiting your OK, ${stats.inEscrow} in escrow`}>
-            <span className="bg-primary" style={{ width: `${pct(stats.paidOut)}%` }} />
-            <span className="bg-amber" style={{ width: `${pct(stats.awaiting)}%` }} />
-          </div>
-          <dl className="mt-3 grid grid-cols-3 gap-2 text-meta">
-            {(
-              [
-                ["Paid out", stats.paidOut, "bg-primary"],
-                ["Awaiting OK", stats.awaiting, "bg-amber"],
-                ["In escrow", stats.inEscrow, "border border-line bg-white"],
-              ] as const
-            ).map(([label, n, dot]) => (
-              <div key={label}>
-                <dt className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className={cn("size-2.5 rounded-sm", dot)} aria-hidden /> {label}
-                </dt>
-                <dd className="mt-0.5 text-[16px] font-bold">
-                  {n} {n === 1 ? "shift" : "shifts"}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </Card>
-
-        <Card delay={120}>
-          <CardTitle className="mb-3">Updates</CardTitle>
-          {loading ? (
-            <Skeleton className="h-24" />
-          ) : stats.updates.length === 0 ? (
-            <p className="text-body text-muted-foreground">Shift check-ins and payments will show up here.</p>
-          ) : (
-            <ul className="divide-y divide-line">
-              {stats.updates.map((u) => (
-                <li key={u.id} className="py-3 first:pt-0 last:pb-0">
-                  <p className="text-[16px] font-bold">{u.title}</p>
-                  <p className="ck-meta">{u.sub}</p>
-                </li>
+      <div className="grid items-start gap-5 lg:grid-cols-3">
+        <div className="space-y-5 lg:col-span-2">
+          <Card tone="mint" delay={0} lift>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-teal">Care funded this month</CardTitle>
+              <span className="ck-meta">via Paystack or Stripe</span>
+            </div>
+            {loading ? (
+              <Skeleton className="mt-3 h-10 w-40" />
+            ) : (
+              <p className="mt-3 text-[34px] font-bold leading-10 text-teal">
+                {stats.funded.length > 0 ? stats.funded.map(([c, m]) => formatMoney(m, c)).join(" + ") : formatMoney(0, "NGN")}
+              </p>
+            )}
+            <div className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-white" role="img" aria-label={`${stats.paidOut} paid out, ${stats.awaiting} awaiting your OK, ${stats.inEscrow} in escrow`}>
+              <span className="bg-primary" style={{ width: `${pct(stats.paidOut)}%` }} />
+              <span className="bg-amber" style={{ width: `${pct(stats.awaiting)}%` }} />
+            </div>
+            <dl className="mt-3 grid grid-cols-3 gap-2 text-meta">
+              {(
+                [
+                  ["Paid out", stats.paidOut, "bg-primary"],
+                  ["Awaiting OK", stats.awaiting, "bg-amber"],
+                  ["In escrow", stats.inEscrow, "border border-line bg-white"],
+                ] as const
+              ).map(([label, n, dot]) => (
+                <div key={label}>
+                  <dt className="flex items-center gap-1.5 text-muted-foreground">
+                    <span className={cn("size-2.5 rounded-sm", dot)} aria-hidden /> {label}
+                  </dt>
+                  <dd className="mt-0.5 text-[16px] font-bold">
+                    {n} {n === 1 ? "shift" : "shifts"}
+                  </dd>
+                </div>
               ))}
+            </dl>
+          </Card>
+
+          <Card delay={120}>
+            <CardTitle className="mb-3">Updates</CardTitle>
+            {loading ? (
+              <Skeleton className="h-24" />
+            ) : stats.updates.length === 0 ? (
+              <p className="text-body text-muted-foreground">Shift check-ins and payments will show up here.</p>
+            ) : (
+              <ul className="divide-y divide-line">
+                {stats.updates.map((u) => (
+                  <li key={u.id} className="py-3 first:pt-0 last:pb-0">
+                    <p className="text-[16px] font-bold">{u.title}</p>
+                    <p className="ck-meta">{u.sub}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
+
+        <div className="space-y-5">
+          <Card tone="blue" delay={240}>
+            <CardTitle className="mb-2">What {name} shares with you</CardTitle>
+            <ul className="divide-y divide-line">
+              <ShareRow label="Shift check-ins & notes" on />
+              <ShareRow label="Crisis alerts" on={locationShared} />
+              <ShareRow label="Health passport" on={healthShared} />
             </ul>
-          )}
-        </Card>
+          </Card>
 
-        <Card tone="blue" delay={240}>
-          <CardTitle className="mb-2">What {name} shares with you</CardTitle>
-          <ul className="divide-y divide-line">
-            <ShareRow label="Shift check-ins & notes" on />
-            <ShareRow label="Crisis alerts" on={locationShared} />
-            <ShareRow label="Health passport" on={healthShared} />
-          </ul>
-        </Card>
-
-        <Button asChild size="lg" className="h-14 w-full text-[17px]">
-          <Link href="/caregivers">Fund next week&apos;s care</Link>
-        </Button>
+          <Button asChild size="lg" className="h-14 w-full text-[17px]">
+            <Link href="/caregivers">Fund next week&apos;s care</Link>
+          </Button>
+        </div>
       </div>
     </div>
   );

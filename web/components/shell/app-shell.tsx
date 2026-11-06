@@ -134,17 +134,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <DashFrame
       homeHref={me.role === "facility_admin" ? "/facility" : "/dashboard"}
-      product={
-        me.role === "facility_admin" ? "Facility" : me.role === "family_abroad" ? "Family" : me.role === "guardian" ? "Guardian" : "Patient"
-      }
       sections={sections}
       sidebarFooter={
         showCrisis && (
           <Link
             href="/crisis"
-            className="flex items-center justify-center gap-2 rounded-md bg-crisis px-3 py-3 text-sm font-[600] text-white shadow-lg shadow-black/25 transition hover:brightness-110 motion-safe:animate-halo"
+            aria-label="Crisis mode"
+            title="Crisis mode"
+            className="flex items-center justify-center gap-2 rounded-md bg-crisis px-3 py-3 text-sm font-[600] text-white shadow-lg shadow-black/25 transition hover:brightness-110 motion-safe:animate-halo lg:group-data-[collapsed]/sidebar:px-0"
           >
-            <Zap className="size-5" /> Crisis mode
+            <Zap className="size-5 shrink-0" />
+            <span className="lg:group-data-[collapsed]/sidebar:hidden">Crisis mode</span>
           </Link>
         )
       }

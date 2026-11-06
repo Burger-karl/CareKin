@@ -34,7 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import write_audit
 from app.core.exceptions import CareKinError, ConflictError, ForbiddenError, NotFoundError
 from app.core.permissions import UserRole
-from app.domains.auth.models import ConsentType
+from app.domains.auth.models import ConsentType, User
 from app.domains.auth.service import has_consent
 from app.domains.patients.models import (
     ADULT_AGE,
@@ -49,6 +49,7 @@ from app.domains.patients.schemas import (
     EmergencyContactCreate,
     EmergencyContactUpdate,
     FamilyLinkCreate,
+    FamilyLinkRead,
     FamilyLinkUpdate,
     GeoPoint,
     GuardianCreate,
@@ -540,6 +541,13 @@ async def remove_emergency_contact(
 ) -> None:
     _require_edit(await get_access(db, patient_id, actor.user_id))
     contact = await _get_contact(db, patient_id, contact_id)
+    # App access granted from this contact goes with it.
+    link = await db.scalar(select(FamilyLink).where(FamilyLink.emergency_contact_id == contact.id))
+    if link is not None:
+        await db.delete(link)
+        _audit(
+            db, actor, "family_link.remove", "family_link", link.id, {"patient_id": str(patient_id)}
+        )
     await db.delete(contact)
     _audit(
         db,
@@ -600,23 +608,43 @@ async def _get_link(db: AsyncSession, patient_id: uuid.UUID, link_id: uuid.UUID)
     return link
 
 
+async def _link_reads(db: AsyncSession, links: list[FamilyLink]) -> list[FamilyLinkRead]:
+    """Family links with the member's name and phone, so people see who has access."""
+    if not links:
+        return []
+    users = {
+        u.id: u
+        for u in await db.scalars(select(User).where(User.id.in_({l.user_id for l in links})))
+    }
+    out = []
+    for link in links:
+        user = users.get(link.user_id)
+        read = FamilyLinkRead.model_validate(link)
+        read.member_name = user.full_name if user else None
+        read.member_phone = user.phone if user else None
+        out.append(read)
+    return out
+
+
 async def list_family_links(
     db: AsyncSession, actor: Actor, patient_id: uuid.UUID
-) -> list[FamilyLink]:
+) -> list[FamilyLinkRead]:
     _require_manage(await get_access(db, patient_id, actor.user_id))
     result = await db.scalars(
         select(FamilyLink)
         .where(FamilyLink.patient_id == patient_id)
         .order_by(FamilyLink.created_at)
     )
-    return list(result)
+    return await _link_reads(db, list(result))
 
 
 async def add_family_link(
     db: AsyncSession, actor: Actor, patient_id: uuid.UUID, data: FamilyLinkCreate
-) -> FamilyLink:
+) -> FamilyLinkRead:
     access = await get_access(db, patient_id, actor.user_id)
     _require_manage(access)
+    if data.emergency_contact_id is not None:
+        await _get_contact(db, patient_id, data.emergency_contact_id)
     if data.user_id == access.patient.user_id:
         raise PatientRuleViolation("A patient can't be linked to themselves")
     link = FamilyLink(patient_id=patient_id, **data.model_dump())
@@ -627,11 +655,19 @@ async def add_family_link(
         "family_link.add",
         "family_link",
         link.id,
-        {"patient_id": str(patient_id), "share_scope": link.share_scope},
+        {
+            "patient_id": str(patient_id),
+            "share_scope": link.share_scope,
+            **(
+                {"emergency_contact_id": str(link.emergency_contact_id)}
+                if link.emergency_contact_id
+                else {}
+            ),
+        },
     )
     await _commit(db)
     await db.refresh(link)
-    return link
+    return (await _link_reads(db, [link]))[0]
 
 
 async def update_family_link(
@@ -640,7 +676,7 @@ async def update_family_link(
     patient_id: uuid.UUID,
     link_id: uuid.UUID,
     data: FamilyLinkUpdate,
-) -> FamilyLink:
+) -> FamilyLinkRead:
     _require_manage(await get_access(db, patient_id, actor.user_id))
     link = await _get_link(db, patient_id, link_id)
     changes = data.model_dump(exclude_none=True)
@@ -656,7 +692,7 @@ async def update_family_link(
     )
     await _commit(db)
     await db.refresh(link)
-    return link
+    return (await _link_reads(db, [link]))[0]
 
 
 async def remove_family_link(

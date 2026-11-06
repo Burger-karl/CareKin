@@ -13,6 +13,7 @@ import { ApiError, api, errorMessage } from "@/lib/api/client";
 import { keys, useMe, usePatients } from "@/lib/api/queries";
 import { SKIP_SETUP_KEY } from "@/lib/storage";
 import type { GeoPoint, Patient } from "@/lib/types";
+import { toE164 } from "@/lib/utils";
 
 const GENOTYPES = ["SS", "SC", "SB+", "SB0", "AS", "AA"];
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
@@ -27,8 +28,8 @@ function FamilyCard({ userId }: { userId: string }) {
       <div>
         <h1 className="text-title font-bold leading-tight">Follow a family member</h1>
         <p className="mt-2 text-muted-foreground">
-          The person you support adds you from their CareKin account. Send them your CareKin ID below. You&apos;ll see
-          only what they choose to share.
+          Send your CareKin ID to the person you support. They add you as an emergency contact in their Settings and
+          enter this ID to give you app access. You&apos;ll see only what they choose to share.
         </p>
       </div>
       <div className="ck-card space-y-3 p-5">
@@ -173,20 +174,10 @@ export function SetupFlow() {
         });
       }
       if (form.contact_name.trim()) {
-        const phone = form.contact_phone.trim().replace(/[\s-]/g, "");
         await api(`patients/${id}/emergency-contacts`, {
           body: {
             name: form.contact_name.trim(),
-            // Nigerian numbers typed any common way: 0803..., 234803..., 803... or +234803...
-            phone: phone.startsWith("+")
-              ? phone
-              : phone.startsWith("234")
-                ? `+${phone}`
-                : phone.startsWith("0")
-                  ? phone.replace(/^0/, "+234")
-                  : /^\d{10}$/.test(phone)
-                    ? `+234${phone}`
-                    : phone,
+            phone: toE164(form.contact_phone),
             relationship: form.contact_relationship.trim() || "contact",
             priority: 1,
           },

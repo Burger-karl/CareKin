@@ -71,6 +71,10 @@ export interface FamilyLink {
   id: string;
   patient_id: string;
   user_id: string;
+  /** The emergency contact this access was granted from, if any. */
+  emergency_contact_id: string | null;
+  member_name: string | null;
+  member_phone: string | null;
   share_scope: { health_data?: boolean; location?: boolean };
   can_fund: boolean;
   created_at: string;

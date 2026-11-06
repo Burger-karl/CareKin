@@ -63,8 +63,8 @@ export function BookingList() {
   return (
     <div>
       <PageHeader title="Bookings" subtitle="Your caregivers and what's been paid" icon={CalendarDays} tone="blue" />
-      <div className="mx-auto max-w-2xl lg:mx-0">
-        <div className="mb-4 grid grid-cols-3 gap-3">
+      <div>
+        <div className="mb-5 grid grid-cols-3 gap-3 lg:gap-5">
           {(
             [
               ["Active", counts.active, Sparkles, "bg-mint text-teal"],
@@ -72,12 +72,14 @@ export function BookingList() {
               ["Done", counts.done, CheckCircle2, "bg-[#E4ECF8] text-[#2B4C84]"],
             ] as const
           ).map(([label, n, Icon, tone]) => (
-            <div key={label} className="ck-card flex flex-col items-center gap-1 p-3 text-center">
-              <span className={cn("flex size-9 items-center justify-center rounded-full", tone)} aria-hidden>
-                <Icon className="size-4" />
+            <div key={label} className="ck-card flex flex-col items-center gap-1 p-3 text-center md:flex-row md:gap-4 md:p-5 md:text-left">
+              <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full md:size-12", tone)} aria-hidden>
+                <Icon className="size-4 md:size-5" />
               </span>
-              <span className="text-[24px] font-bold leading-7">{bookings.isPending ? "–" : n}</span>
-              <span className="ck-meta">{label}</span>
+              <span className="flex flex-col items-center md:items-start">
+                <span className="text-[24px] font-bold leading-7 md:text-[28px] md:leading-8">{bookings.isPending ? "–" : n}</span>
+                <span className="ck-meta">{label}</span>
+              </span>
             </div>
           ))}
         </div>
@@ -102,7 +104,12 @@ export function BookingList() {
           ))}
         </div>
 
-        {bookings.isPending && <Skeleton className="h-24 rounded-xl" />}
+        {bookings.isPending && (
+          <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" />
+          </div>
+        )}
         {bookings.isError && (
           <Card className="text-center">
             <p className="font-bold">Couldn&apos;t load bookings.</p>
@@ -122,7 +129,7 @@ export function BookingList() {
             )}
           </Card>
         )}
-        <ul className="space-y-3">{list.map((b) => <Row key={b.id} b={b} />)}</ul>
+        <ul className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">{list.map((b) => <Row key={b.id} b={b} />)}</ul>
       </div>
     </div>
   );

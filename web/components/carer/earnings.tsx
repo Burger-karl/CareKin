@@ -41,41 +41,47 @@ export function Earnings() {
   return (
     <div className="space-y-4">
       <h1 className="text-[30px] font-bold leading-9">Earnings</h1>
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="bg-mint">
-          <p className="ck-meta">Paid to you</p>
-          {loading ? <Skeleton className="mt-2 h-8" /> : <p className="mt-1 text-[24px] font-bold text-teal">{formatMoney(totals.paid)}</p>}
-        </Card>
-        <Card>
-          <p className="ck-meta">In escrow</p>
-          {loading ? <Skeleton className="mt-2 h-8" /> : <p className="mt-1 text-[24px] font-bold">{formatMoney(totals.pending)}</p>}
-        </Card>
-      </div>
-      <p className="ck-meta">Money is held by a licensed escrow partner and released after the family confirms, or automatically 24 hours after a clean check-out.</p>
+      <div className="grid items-start gap-5 lg:grid-cols-3">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
+            <Card className="bg-mint">
+              <p className="ck-meta">Paid to you</p>
+              {loading ? <Skeleton className="mt-2 h-8" /> : <p className="mt-1 text-[24px] font-bold text-teal">{formatMoney(totals.paid)}</p>}
+            </Card>
+            <Card>
+              <p className="ck-meta">In escrow</p>
+              {loading ? <Skeleton className="mt-2 h-8" /> : <p className="mt-1 text-[24px] font-bold">{formatMoney(totals.pending)}</p>}
+            </Card>
+          </div>
+          <p className="ck-meta">Money is held by a licensed escrow partner and released after the family confirms, or automatically 24 hours after a clean check-out.</p>
+        </div>
 
-      <Card>
-        <CardTitle className="mb-3">Bookings</CardTitle>
-        {paying.length === 0 && !loading ? (
-          <p className="text-body text-muted-foreground">Paid bookings will show up here.</p>
-        ) : (
-          <ul className="divide-y divide-line">
-            {paying.map((b, i) => {
-              const s = money[i]?.data?.escrow?.status;
-              return (
-                <li key={b.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                  <div className="min-w-0">
-                    <p className="truncate font-bold">{bookingSummary(b)}</p>
-                    <p className="ck-meta">{formatMoney(b.total_minor, b.currency)}</p>
-                  </div>
-                  <Badge variant={s === "released" ? "success" : s === "on_hold_dispute" ? "danger" : "amber"} className="shrink-0 text-xs">
-                    {s === "released" ? "Paid" : s === "on_hold_dispute" ? "On hold" : "In escrow"}
-                  </Badge>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Card>
+        <div className="lg:col-span-2">
+          <Card>
+            <CardTitle className="mb-3">Bookings</CardTitle>
+            {paying.length === 0 && !loading ? (
+              <p className="text-body text-muted-foreground">Paid bookings will show up here.</p>
+            ) : (
+              <ul className="divide-y divide-line">
+                {paying.map((b, i) => {
+                  const s = money[i]?.data?.escrow?.status;
+                  return (
+                    <li key={b.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                      <div className="min-w-0">
+                        <p className="truncate font-bold">{bookingSummary(b)}</p>
+                        <p className="ck-meta">{formatMoney(b.total_minor, b.currency)}</p>
+                      </div>
+                      <Badge variant={s === "released" ? "success" : s === "on_hold_dispute" ? "danger" : "amber"} className="shrink-0 text-xs">
+                        {s === "released" ? "Paid" : s === "on_hold_dispute" ? "On hold" : "In escrow"}
+                      </Badge>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

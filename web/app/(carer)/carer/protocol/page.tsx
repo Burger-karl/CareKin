@@ -19,11 +19,11 @@ export default function ProtocolPage() {
         ← Back to your shift
       </Link>
       <h1 className="text-[30px] font-bold leading-9">Escalation protocol</h1>
-      <p className="rounded-xl bg-crisis-soft p-4 text-[15px]">
+      <p className="max-w-3xl rounded-xl bg-crisis-soft p-4 text-[15px]">
         <span className="font-bold text-crisis-ink">We don&apos;t give medical advice.</span> This is who to call and what to
         record. The SCD training in the Academy covers the warning signs.
       </p>
-      <ol className="space-y-3">
+      <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {STEPS.map(([t, b], i) => (
           <li key={t} className="ck-card flex gap-4 p-4">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-mint font-bold text-teal">{i + 1}</span>

@@ -3,12 +3,11 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Download, FileText, MapPin, Navigation, Plus, Share2, Zap } from "lucide-react";
+import { ArrowUpRight, Download, FileText, MapPin, Navigation, Share2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, toneFor } from "@/components/brand";
 import { CrisisButton } from "@/components/crisis/crisis-button";
 import { DeviceSetupCard } from "@/components/crisis/device-setup";
-import { FamilyDialog } from "@/components/dashboard/family-dialog";
 import { is24hEmergency, serviceTags } from "@/components/facilities/facility-card";
 import { FacilityMapDialog } from "@/components/facilities/facility-map";
 import { useSession } from "@/components/session/session";
@@ -38,23 +37,20 @@ const OPEN = new Set(["requested", "pending_guardian", "accepted", "paid", "in_p
 const ACTIVE = new Set(["accepted", "paid", "in_progress"]);
 
 // ------------------------------------------------------------------ stat card
-const BAR = { teal: "bg-primary", coral: "bg-crisis", amber: "bg-amber", blue: "bg-[#2B6CB0]" } as const;
-
 function StatCard({
   title,
   badge,
   value,
   note,
   progress,
-  color,
   href,
 }: {
   title: string;
   badge: string;
   value: React.ReactNode;
   note: string;
+  /** Shown as a bar under the number, 0–1. */
   progress?: number;
-  color: keyof typeof BAR;
   href?: string;
 }) {
   const body = (
@@ -63,13 +59,15 @@ function StatCard({
         <h2 className="truncate text-base font-[600] text-slate-800">{title}</h2>
         <span className="shrink-0 rounded bg-mint px-1.5 py-0.5 text-[10px] font-[600] leading-tight text-teal">{badge}</span>
       </div>
-      <div className="mb-4 flex items-end justify-between gap-3">
+      <div className={cn("flex items-end justify-between gap-3", progress !== undefined && "mb-4")}>
         <p className="text-3xl font-medium text-slate-800">{value}</p>
         <p className="truncate text-right text-sm text-slate-400">{note}</p>
       </div>
-      <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-200" role="presentation">
-        <span className={cn("rounded-full transition-[width] duration-700", BAR[color])} style={{ width: `${Math.round((progress ?? 0) * 100)}%` }} />
-      </div>
+      {progress !== undefined && (
+        <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-200" role="presentation">
+          <span className={"rounded-full bg-primary transition-[width] duration-700"} style={{ width: `${Math.round(progress * 100)}%` }} />
+        </div>
+      )}
     </>
   );
   return href ? (
@@ -196,7 +194,6 @@ export function PatientHome() {
   const shares = useShares(patientId);
   const links = useFamilyLinks(patientId, patient?.access !== "family");
   const bookings = useBookings();
-  const [familyOpen, setFamilyOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [mapFor, setMapFor] = useState<Facility | null>(null);
 
@@ -233,7 +230,6 @@ export function PatientHome() {
     (contacts.data?.length ?? 0) > 0,
   ];
   const done = checks.filter(Boolean).length;
-  const crisisMonths = new Set(crisisEntries.map((e) => e.occurred_at.slice(0, 7))).size;
   const shiftsDone = shifts.data?.filter((s) => s.status === "completed").length ?? 0;
   const shiftsTotal = shifts.data?.length ?? 0;
   const activeCount = mine.filter((b) => ACTIVE.has(b.status)).length;
@@ -280,7 +276,6 @@ export function PatientHome() {
           value={`${Math.round((done / checks.length) * 100)}%`}
           note={`${done} of ${checks.length} done`}
           progress={done / checks.length}
-          color="teal"
           href="/passport"
         />
         <StatCard
@@ -288,8 +283,6 @@ export function PatientHome() {
           badge="12 months"
           value={crises.isPending ? "–" : crisisEntries.length}
           note={crisisEntries[0] ? `Last ${formatDate(crisisEntries[0].occurred_at)}` : "None logged"}
-          progress={crisisMonths / 12}
-          color="coral"
           href="/passport"
         />
         <StatCard
@@ -297,18 +290,14 @@ export function PatientHome() {
           badge="Now"
           value={bookings.isPending ? "–" : activeCount}
           note={shiftsTotal ? `${shiftsDone} of ${shiftsTotal} shifts done` : activeCount ? "Booked" : "No active booking"}
-          progress={shiftsTotal ? shiftsDone / shiftsTotal : 0}
-          color="amber"
           href="/bookings"
         />
         <StatCard
           title="Emergency contacts"
           badge="Alerts"
           value={contacts.isPending ? "–" : (contacts.data?.length ?? 0)}
-          note={`${links.data?.length ?? 0} family following`}
-          progress={Math.min(1, (contacts.data?.length ?? 0) / 3)}
-          color="blue"
-          href="/settings"
+          note={`${links.data?.length ?? 0} with app access`}
+          href="/settings#contacts"
         />
       </div>
 
@@ -411,8 +400,8 @@ export function PatientHome() {
         </Card>
       </div>
 
-      {/* Passport, activity, family */}
-      <div className="grid gap-5 xl:grid-cols-3">
+      {/* Passport, activity */}
+      <div className="grid gap-5 xl:grid-cols-2">
         <Card>
           <div className="mb-4 flex items-center justify-between">
             <CardTitle>Health passport</CardTitle>
@@ -462,39 +451,6 @@ export function PatientHome() {
             </ul>
           )}
         </Card>
-
-        {patient.access !== "family" && (
-          <Card>
-            <div className="mb-4 flex items-center justify-between">
-              <CardTitle>Family access</CardTitle>
-              <button onClick={() => setFamilyOpen(true)} className="text-sm font-medium text-teal hover:underline">
-                Manage
-              </button>
-            </div>
-            {links.isPending ? (
-              <Skeleton className="h-12" />
-            ) : links.data && links.data.length > 0 ? (
-              <ul className="space-y-3">
-                {links.data.map((l) => (
-                  <li key={l.id} className="flex items-center gap-3">
-                    <Avatar label="FM" tone="blue" className="size-9 text-xs" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-800">Family member</p>
-                      <p className="text-xs">{l.can_fund ? "Can fund care" : "Follows care"}</p>
-                    </div>
-                    <span className="text-xs font-medium text-teal">{l.share_scope.health_data ? "Sees reports" : "Basic"}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm">Nobody follows this care yet.</p>
-            )}
-            <Button variant="secondary" size="sm" className="mt-4" onClick={() => setFamilyOpen(true)}>
-              <Plus /> Add family member
-            </Button>
-            <FamilyDialog patientId={patient.id} open={familyOpen} onOpenChange={setFamilyOpen} />
-          </Card>
-        )}
       </div>
 
       <FacilityMapDialog facility={mapFor} onClose={() => setMapFor(null)} />

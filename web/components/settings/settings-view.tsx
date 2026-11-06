@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { LogOut, MapPin, ShieldCheck, SlidersHorizontal, UserRound } from "lucide-react";
+import { MapPin, ShieldCheck, SlidersHorizontal, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { CrisisDevicesCard } from "@/components/crisis/device-setup";
 import { PlaceDialog } from "@/components/location/place-dialog";
+import { ContactsCard } from "@/components/settings/contacts-card";
 import { PageHeader } from "@/components/shell/app-shell";
 import { useSession } from "@/components/session/session";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ const CONSENTS: { type: ConsentType; title: string; body: string; required?: boo
 ];
 
 export function SettingsView() {
-  const { me, patient, signOut } = useSession();
+  const { me, patient } = useSession();
   const [placeOpen, setPlaceOpen] = useState(false);
   const qc = useQueryClient();
   const [name, setName] = useState(me.full_name);
@@ -65,8 +66,8 @@ export function SettingsView() {
   return (
     <div>
       <PageHeader title="Settings" subtitle="Your details and what you share" icon={SlidersHorizontal} tone="slate" />
-      <div className="mx-auto max-w-xl space-y-4 lg:mx-0">
-        <Card>
+      <div className="grid items-start gap-5 xl:grid-cols-3">
+        <Card className="xl:row-span-2">
           <CardTitle className="mb-4 flex items-center gap-2.5">
             <span className="flex size-9 items-center justify-center rounded-full bg-mint text-teal" aria-hidden>
               <UserRound className="size-4" />
@@ -81,22 +82,24 @@ export function SettingsView() {
               save.mutate();
             }}
           >
-            <Field label="Full name" htmlFor="s-name" error={errors.full_name}>
-              <Input id="s-name" value={name} onChange={(e) => setName(e.target.value)} />
-            </Field>
-            <Field label="Phone" htmlFor="s-phone" hint="Verified. Contact support to change it.">
-              <Input id="s-phone" value={me.phone} disabled />
-            </Field>
-            <Field label="Email (optional)" htmlFor="s-email" error={errors.email}>
-              <Input id="s-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            </Field>
-            <Field label="Language" htmlFor="s-lang">
-              <Select id="s-lang" value={lang} onChange={(e) => setLang(e.target.value as Me["preferred_language"])}>
-                <option value="en">English</option>
-                <option value="ig">Igbo</option>
-                <option value="pcm">Pidgin</option>
-              </Select>
-            </Field>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+              <Field label="Full name" htmlFor="s-name" error={errors.full_name}>
+                <Input id="s-name" value={name} onChange={(e) => setName(e.target.value)} />
+              </Field>
+              <Field label="Phone" htmlFor="s-phone" hint="Verified. Contact support to change it.">
+                <Input id="s-phone" value={me.phone} disabled />
+              </Field>
+              <Field label="Email (optional)" htmlFor="s-email" error={errors.email}>
+                <Input id="s-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              </Field>
+              <Field label="Language" htmlFor="s-lang">
+                <Select id="s-lang" value={lang} onChange={(e) => setLang(e.target.value as Me["preferred_language"])}>
+                  <option value="en">English</option>
+                  <option value="ig">Igbo</option>
+                  <option value="pcm">Pidgin</option>
+                </Select>
+              </Field>
+            </div>
             <Button type="submit" loading={save.isPending}>
               Save changes
             </Button>
@@ -104,7 +107,7 @@ export function SettingsView() {
         </Card>
 
         {patient && patient.access !== "family" && (
-          <Card>
+          <Card className="xl:col-span-2">
             <CardTitle className="mb-1 flex items-center gap-2.5">
               <span className="flex size-9 items-center justify-center rounded-full bg-mint text-teal" aria-hidden>
                 <MapPin className="size-4" />
@@ -124,9 +127,13 @@ export function SettingsView() {
           </Card>
         )}
 
-        <CrisisDevicesCard />
+        <div className="xl:col-span-2">
+          <CrisisDevicesCard />
+        </div>
 
-        <Card tone="soft">
+        {patient && patient.access !== "family" && <ContactsCard patientId={patient.id} className="xl:col-span-3" />}
+
+        <Card tone="soft" className="xl:col-span-3">
           <CardTitle className="mb-1 flex items-center gap-2.5">
             <span className="flex size-9 items-center justify-center rounded-full bg-mint text-teal" aria-hidden>
               <ShieldCheck className="size-4" />
@@ -139,9 +146,9 @@ export function SettingsView() {
               Privacy policy
             </Link>
           </p>
-          <ul className="divide-y divide-line">
+          <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {rows.map((c) => (
-              <li key={c.type} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+              <li key={c.type} className="flex items-center justify-between gap-4 rounded-lg border border-line bg-white p-4">
                 <div>
                   <p id={`c-${c.type}`} className="text-[16px] font-bold">
                     {c.title}
@@ -158,10 +165,6 @@ export function SettingsView() {
             ))}
           </ul>
         </Card>
-
-        <Button variant="outline" onClick={() => void signOut()}>
-          <LogOut /> Sign out
-        </Button>
       </div>
     </div>
   );

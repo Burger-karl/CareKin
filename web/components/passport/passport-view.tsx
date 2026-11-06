@@ -103,146 +103,150 @@ export function PassportView() {
     <div>
       <PageHeader title="Health Passport" subtitle="Show this at any hospital" icon={HeartPulse} tone="coral" />
 
-      <div className="mx-auto max-w-2xl space-y-4 lg:mx-0">
-        <Card tone="teal" className="relative overflow-hidden shadow-lg shadow-teal/20">
-          <div aria-hidden className="absolute -right-8 -top-10 size-40 rounded-full bg-white/10" />
-          <div className="relative">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-[17px] font-bold">Your medical profile</h2>
-              <Shield className="size-5 text-white/80" aria-hidden />
-            </div>
-            <dl className="grid grid-cols-3 gap-2.5">
-              {[
-                ["Blood type", patient.blood_group ?? p?.patient.blood_group ?? "—"],
-                ["Genotype", patient.genotype ?? p?.patient.genotype ?? "—"],
-                ["Age", String(patient.age)],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-xl bg-white/15 px-3 py-2.5 backdrop-blur">
-                  <dt className="text-[13px] text-white/75">{label}</dt>
-                  <dd className="text-[28px] font-bold leading-9">{value}</dd>
-                </div>
-              ))}
-            </dl>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <Button size="lg" className="bg-white text-teal hover:bg-white/90" onClick={exportPdf} loading={exporting}>
-                <Download /> Export PDF
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-white/50 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-                onClick={() => setPickOpen(true)}
-                disabled={!canManage}
-              >
-                <Share2 /> Share
-              </Button>
-            </div>
-          </div>
-        </Card>
-
-        <div className="grid grid-cols-2 gap-3">
-          <Card tone="amber" className="p-4">
-            <p className="ck-meta mb-1.5 text-[15px]">Common triggers</p>
-            {passport.isPending ? <Skeleton className="h-14" /> : triggers.length ? (
-              <ul className="space-y-0.5 text-[16px]">{triggers.map((t) => <li key={t}>{t}</li>)}</ul>
-            ) : (
-              <p className="ck-meta">None added</p>
-            )}
-          </Card>
-          <Card tone="blue" className="p-4">
-            <p className="ck-meta mb-1.5 text-[15px]">Current meds</p>
-            {passport.isPending ? <Skeleton className="h-14" /> : meds.length ? (
-              <ul className="space-y-0.5 text-[16px]">{meds.map((m) => <li key={m}>{m}</li>)}</ul>
-            ) : (
-              <p className="ck-meta">None added</p>
-            )}
-          </Card>
-        </div>
-        {profile?.allergies && (
-          <Tile className="bg-amber-soft">
-            <p className="text-[15px]">
-              <span className="font-bold text-amber-ink">Allergies: </span>
-              {profile.allergies}
-            </p>
-          </Tile>
-        )}
-
-        <div className="flex items-center justify-between gap-3 pt-1">
-          <div className="flex gap-2 overflow-x-auto" role="group" aria-label="Timeline filter">
-            {(
-              [
-                ["all", "All events"],
-                ["year", "This year"],
-                ["crises", "Crises only"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                aria-pressed={filter === id}
-                onClick={() => setFilter(id)}
-                className={cn(
-                  "shrink-0 rounded-full px-4 py-2 text-[15px] font-medium",
-                  filter === id ? "bg-primary font-semibold text-white shadow-md shadow-teal/25" : "bg-white text-foreground/80 ring-1 ring-line hover:bg-mint-soft",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <h2 className="text-[19px] font-bold">Health timeline</h2>
-          {canManage && (
-            <Button variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
-              <Plus /> Add entry
-            </Button>
-          )}
-        </div>
-
-        {passport.isPending && <Skeleton className="h-32 rounded-xl" />}
-        {passport.isError && (
-          <Card className="text-center">
-            <p className="font-bold">Couldn&apos;t load the passport.</p>
-            <p className="ck-meta mt-1">{passport.error.message}</p>
-            <Button className="mt-3" variant="secondary" onClick={() => passport.refetch()}>
-              Try again
-            </Button>
-          </Card>
-        )}
-        {passport.isSuccess && entries.length === 0 && (
-          <Card className="text-center">
-            <p className="font-bold">Nothing here yet</p>
-            <p className="ck-meta mt-1">Crises, hospital visits and medication changes will build your timeline.</p>
-          </Card>
-        )}
-        <ul className="space-y-3">{entries.map((e) => <EntryCard key={e.id} e={e} />)}</ul>
-
-        {activeShares.length > 0 && (
-          <Card tone="soft">
-            <h2 className="mb-3 text-[17px] font-bold">Shared right now</h2>
-            <ul className="divide-y divide-line">
-              {activeShares.map((s) => (
-                <li key={s.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                  <div className="min-w-0">
-                    <p className="font-bold">{s.facility_name ?? "Facility"}</p>
-                    <p className="ck-meta">Until {formatDate(s.expires_at)}</p>
+      <div className="grid items-start gap-5 lg:grid-cols-5">
+        <div className="space-y-4 lg:col-span-2">
+          <Card tone="teal" className="relative overflow-hidden shadow-lg shadow-teal/20">
+            <div aria-hidden className="absolute -right-8 -top-10 size-40 rounded-full bg-white/10" />
+            <div className="relative">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-[17px] font-bold">Your medical profile</h2>
+                <Shield className="size-5 text-white/80" aria-hidden />
+              </div>
+              <dl className="grid grid-cols-3 gap-2.5">
+                {[
+                  ["Blood type", patient.blood_group ?? p?.patient.blood_group ?? "—"],
+                  ["Genotype", patient.genotype ?? p?.patient.genotype ?? "—"],
+                  ["Age", String(patient.age)],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-xl bg-white/15 px-3 py-2.5 backdrop-blur">
+                    <dt className="text-[13px] text-white/75">{label}</dt>
+                    <dd className="text-[28px] font-bold leading-9">{value}</dd>
                   </div>
-                  <Button variant="crisis-outline" size="sm" onClick={() => revoke.mutate(s.id)} disabled={revoke.isPending}>
-                    Stop sharing
-                  </Button>
-                </li>
-              ))}
-            </ul>
+                ))}
+              </dl>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <Button size="lg" className="bg-white text-teal hover:bg-white/90" onClick={exportPdf} loading={exporting}>
+                  <Download /> Export PDF
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="border-white/50 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                  onClick={() => setPickOpen(true)}
+                  disabled={!canManage}
+                >
+                  <Share2 /> Share
+                </Button>
+              </div>
+            </div>
           </Card>
-        )}
 
-        <div className="rounded-xl bg-mint-soft p-4 text-[15px] leading-snug">
-          <span className="font-bold text-teal">Encrypted &amp; private.</span> You control every share. Full audit log of
-          who viewed what.
+          <div className="grid grid-cols-2 gap-3">
+            <Card tone="amber" className="p-4">
+              <p className="ck-meta mb-1.5 text-[15px]">Common triggers</p>
+              {passport.isPending ? <Skeleton className="h-14" /> : triggers.length ? (
+                <ul className="space-y-0.5 text-[16px]">{triggers.map((t) => <li key={t}>{t}</li>)}</ul>
+              ) : (
+                <p className="ck-meta">None added</p>
+              )}
+            </Card>
+            <Card tone="blue" className="p-4">
+              <p className="ck-meta mb-1.5 text-[15px]">Current meds</p>
+              {passport.isPending ? <Skeleton className="h-14" /> : meds.length ? (
+                <ul className="space-y-0.5 text-[16px]">{meds.map((m) => <li key={m}>{m}</li>)}</ul>
+              ) : (
+                <p className="ck-meta">None added</p>
+              )}
+            </Card>
+          </div>
+          {profile?.allergies && (
+            <Tile className="bg-amber-soft">
+              <p className="text-[15px]">
+                <span className="font-bold text-amber-ink">Allergies: </span>
+                {profile.allergies}
+              </p>
+            </Tile>
+          )}
+
+          {activeShares.length > 0 && (
+            <Card tone="soft">
+              <h2 className="mb-3 text-[17px] font-bold">Shared right now</h2>
+              <ul className="divide-y divide-line">
+                {activeShares.map((s) => (
+                  <li key={s.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                    <div className="min-w-0">
+                      <p className="font-bold">{s.facility_name ?? "Facility"}</p>
+                      <p className="ck-meta">Until {formatDate(s.expires_at)}</p>
+                    </div>
+                    <Button variant="crisis-outline" size="sm" onClick={() => revoke.mutate(s.id)} disabled={revoke.isPending}>
+                      Stop sharing
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          <div className="rounded-xl bg-mint-soft p-4 text-[15px] leading-snug">
+            <span className="font-bold text-teal">Encrypted &amp; private.</span> You control every share. Full audit log of
+            who viewed what.
+          </div>
+          <p className="text-meta text-muted-foreground">{p?.disclaimer}</p>
+          {me.role === "family_abroad" && <Badge variant="info">Shared with you by the patient</Badge>}
         </div>
-        <p className="text-meta text-muted-foreground">{p?.disclaimer}</p>
-        {me.role === "family_abroad" && <Badge variant="info">Shared with you by the patient</Badge>}
+
+        <div className="space-y-4 lg:col-span-3">
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <div className="flex gap-2 overflow-x-auto" role="group" aria-label="Timeline filter">
+              {(
+                [
+                  ["all", "All events"],
+                  ["year", "This year"],
+                  ["crises", "Crises only"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  aria-pressed={filter === id}
+                  onClick={() => setFilter(id)}
+                  className={cn(
+                    "shrink-0 rounded-full px-4 py-2 text-[15px] font-medium",
+                    filter === id ? "bg-primary font-semibold text-white shadow-md shadow-teal/25" : "bg-white text-foreground/80 ring-1 ring-line hover:bg-mint-soft",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <h2 className="text-[19px] font-bold">Health timeline</h2>
+            {canManage && (
+              <Button variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
+                <Plus /> Add entry
+              </Button>
+            )}
+          </div>
+
+          {passport.isPending && <Skeleton className="h-32 rounded-xl" />}
+          {passport.isError && (
+            <Card className="text-center">
+              <p className="font-bold">Couldn&apos;t load the passport.</p>
+              <p className="ck-meta mt-1">{passport.error.message}</p>
+              <Button className="mt-3" variant="secondary" onClick={() => passport.refetch()}>
+                Try again
+              </Button>
+            </Card>
+          )}
+          {passport.isSuccess && entries.length === 0 && (
+            <Card className="text-center">
+              <p className="font-bold">Nothing here yet</p>
+              <p className="ck-meta mt-1">Crises, hospital visits and medication changes will build your timeline.</p>
+            </Card>
+          )}
+          <ul className="space-y-3">{entries.map((e) => <EntryCard key={e.id} e={e} />)}</ul>
+        </div>
       </div>
 
       <SharePicker patientId={patient.id} open={pickOpen} onOpenChange={setPickOpen} />

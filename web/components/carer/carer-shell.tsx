@@ -65,7 +65,6 @@ export function CarerShell({ children }: { children: React.ReactNode }) {
   return (
     <DashFrame
       homeHref="/carer"
-      product="Caregiver"
       sections={SECTIONS}
       topbar={
         <>
@@ -84,7 +83,7 @@ export function CarerShell({ children }: { children: React.ReactNode }) {
         )
       }
     >
-      <div className="mx-auto w-full max-w-3xl">{children}</div>
+      {children}
     </DashFrame>
   );
 }
