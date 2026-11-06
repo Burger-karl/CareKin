@@ -96,27 +96,41 @@ export function FacilityFinder() {
         action={<ViewSwitch view={view} onChange={setView} />}
       />
 
-      <div className="mx-auto max-w-2xl lg:mx-0">
-        <div className="flex items-center gap-3 rounded-xl border-[1.5px] border-[#BEDCD8] bg-gradient-to-r from-mint to-white px-4 py-3.5 shadow-sm">
-          <MapPin className="size-5 shrink-0 text-muted-foreground" aria-hidden />
-          <p className="min-w-0 flex-1 truncate text-[16px] font-bold">{locationLabel}</p>
-          <button onClick={() => setLocOpen(true)} className="text-[15px] font-medium text-muted-foreground hover:text-teal">
-            Change
-          </button>
-        </div>
+      <div>
+        <div className="grid gap-3 lg:grid-cols-3">
+          <div className="flex items-center gap-3 rounded-xl border-[1.5px] border-[#BEDCD8] bg-gradient-to-r from-mint to-white px-4 py-3.5 shadow-sm">
+            <MapPin className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+            <p className="min-w-0 flex-1 truncate text-[16px] font-bold">{locationLabel}</p>
+            <button onClick={() => setLocOpen(true)} className="text-[15px] font-medium text-muted-foreground hover:text-teal">
+              Change
+            </button>
+          </div>
 
-        <div className="relative mt-4">
-          <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" aria-hidden />
-          <Input
-            aria-label="Search by name or address"
-            placeholder="Search by name or address"
-            className="pl-12"
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setLimit(PAGE);
-            }}
-          />
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input
+              aria-label="Search by name or address"
+              placeholder="Search by name or address"
+              className="pl-12"
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setLimit(PAGE);
+              }}
+            />
+          </div>
+
+          <div>
+            <Input
+              aria-label="Accepts HMO"
+              placeholder="Accepts HMO, e.g. Hygeia HMO"
+              value={hmo}
+              onChange={(e) => {
+                setHmo(e.target.value);
+                setLimit(PAGE);
+              }}
+            />
+          </div>
         </div>
 
         <div className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-wrap lg:px-0" role="group" aria-label="Filters">
@@ -129,23 +143,10 @@ export function FacilityFinder() {
             </Chip>
           ))}
         </div>
-        <div className="mt-3">
-          <Input
-            aria-label="Accepts HMO"
-            placeholder="Accepts HMO, e.g. Hygeia HMO"
-            value={hmo}
-            onChange={(e) => {
-              setHmo(e.target.value);
-              setLimit(PAGE);
-            }}
-            className="h-11"
-          />
-        </div>
-
       </div>
 
-      <div className={view === "map" ? "mt-5" : "mx-auto max-w-2xl lg:mx-0"}>
-        <div className="mt-5 space-y-4" aria-busy={results.isFetching}>
+      <div>
+        <div className={cn("mt-5", view === "map" ? "space-y-4" : "grid items-start gap-4 md:grid-cols-2 2xl:grid-cols-3")} aria-busy={results.isFetching}>
           {results.isPending && (
             <>
               <Skeleton className="h-44 rounded-xl" />
@@ -153,7 +154,7 @@ export function FacilityFinder() {
             </>
           )}
           {results.isError && (
-            <div className="ck-card p-5 text-center">
+            <div className="ck-card col-span-full p-5 text-center">
               <p className="font-bold">Couldn&apos;t load facilities.</p>
               <p className="ck-meta mt-1">{results.error.message}</p>
               <Button className="mt-3" variant="secondary" onClick={() => results.refetch()}>
@@ -162,7 +163,7 @@ export function FacilityFinder() {
             </div>
           )}
           {results.isSuccess && items.length === 0 && (
-            <div className="ck-card p-6 text-center">
+            <div className="ck-card col-span-full p-6 text-center">
               <p className="text-[17px] font-bold">No verified facility matches all your filters</p>
               <p className="ck-meta mt-1">Only facilities CareKin has checked appear here.</p>
               {lastFilter && (
@@ -192,12 +193,12 @@ export function FacilityFinder() {
             ))
           )}
           {results.isSuccess && items.length > 0 && (
-            <p className="text-center text-meta text-muted-foreground" aria-live="polite">
+            <p className="col-span-full text-center text-meta text-muted-foreground" aria-live="polite">
               Showing {items.length} of {total}
             </p>
           )}
           {items.length < total && (
-            <Button variant="secondary" className="w-full" onClick={() => setLimit((l) => l + PAGE)} loading={results.isFetching}>
+            <Button variant="secondary" className="col-span-full w-full" onClick={() => setLimit((l) => l + PAGE)} loading={results.isFetching}>
               Show more
             </Button>
           )}

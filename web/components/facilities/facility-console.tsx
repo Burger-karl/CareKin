@@ -18,7 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { ApiError, api, errorMessage } from "@/lib/api/client";
 import { readJson, writeJson } from "@/lib/storage";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, toE164 } from "@/lib/utils";
 import type { Facility, FacilityService, GeoPoint } from "@/lib/types";
 
 // What the finder filters on. Services are checked by CareKin before they appear in searches.
@@ -51,16 +51,6 @@ async function loadMyFacilities(): Promise<Facility[]> {
     const found = await Promise.all(ids.map((id) => api<Facility>(`facilities/${id}`).catch(() => null)));
     return found.filter((f): f is Facility => f !== null);
   }
-}
-
-/** Nigerian numbers typed any common way: 0803…, 234803…, 803… or +234803…. */
-function toE164(raw: string) {
-  const p = raw.replace(/[\s()-]/g, "");
-  if (p.startsWith("+")) return p;
-  if (p.startsWith("234")) return `+${p}`;
-  if (p.startsWith("0")) return p.replace(/^0/, "+234");
-  if (/^\d{10}$/.test(p)) return `+234${p}`;
-  return p;
 }
 
 const hmoList = (text: string) =>

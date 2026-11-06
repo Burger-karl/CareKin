@@ -385,3 +385,71 @@ async def test_emergency_contacts(api, latest_code):
     assert r.json()["channel"] == "whatsapp"
     assert (await api.delete(f"{base}/{contact_id}", headers=h)).status_code == 204
     assert len((await api.get(base, headers=h)).json()) == 1
+
+
+async def test_family_access_granted_from_emergency_contact(api, latest_code, db):
+    h, _ = await login(api, latest_code, "08031230013")
+    family_h, family_id = await family_user(db)  # phone +2348039999999
+    pid = (
+        await api.post(
+            "/patients",
+            json={"full_name": "A", "date_of_birth": _dob(30), "genotype": "SS"},
+            headers=h,
+        )
+    ).json()["id"]
+    contacts = f"/patients/{pid}/emergency-contacts"
+    uche = (
+        await api.post(
+            contacts,
+            json={"name": "Uche", "phone": "+2348039999999", "relationship": "brother"},
+            headers=h,
+        )
+    ).json()
+    stranger = (
+        await api.post(
+            contacts,
+            json={"name": "Bola", "phone": "+2348011112222", "relationship": "friend"},
+            headers=h,
+        )
+    ).json()
+
+    # A contact without a CareKin account can't be given access yet.
+    r = await api.post(
+        f"/patients/{pid}/family-links", json={"emergency_contact_id": stranger["id"]}, headers=h
+    )
+    assert r.status_code == 422, r.text
+    assert "+2348011112222" in r.json()["error"]["message"]
+
+    # Exactly one of user_id / emergency_contact_id.
+    r = await api.post(
+        f"/patients/{pid}/family-links",
+        json={"emergency_contact_id": uche["id"], "user_id": str(family_id)},
+        headers=h,
+    )
+    assert r.status_code == 422
+
+    r = await api.post(
+        f"/patients/{pid}/family-links",
+        json={"emergency_contact_id": uche["id"], "share_scope": {"location": True}},
+        headers=h,
+    )
+    assert r.status_code == 201, r.text
+    link = r.json()
+    assert link["user_id"] == str(family_id)
+    assert link["emergency_contact_id"] == uche["id"]
+    assert (link["member_name"], link["member_phone"]) == ("Uche Abroad", "+2348039999999")
+
+    listed = (await api.get(f"/patients/{pid}/family-links", headers=h)).json()
+    assert [l["member_name"] for l in listed] == ["Uche Abroad"]
+    assert (await api.get(f"/patients/{pid}", headers=family_h)).json()["access"] == "family"
+
+    # Granting the same contact twice clashes.
+    r = await api.post(
+        f"/patients/{pid}/family-links", json={"emergency_contact_id": uche["id"]}, headers=h
+    )
+    assert r.status_code == 409
+
+    # Removing the contact removes the access granted from it.
+    assert (await api.delete(f"{contacts}/{uche['id']}", headers=h)).status_code == 204
+    assert (await api.get(f"/patients/{pid}/family-links", headers=h)).json() == []
+    assert (await api.get(f"/patients/{pid}", headers=family_h)).status_code in (403, 404)

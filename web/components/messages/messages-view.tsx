@@ -80,35 +80,37 @@ export function MessagesView() {
         }
       />
 
-      <div className="mx-auto max-w-2xl lg:mx-0">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-5 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" aria-hidden />
-          <Input
-            aria-label="Search conversations"
-            placeholder="Search conversations"
-            className="h-14 rounded-full pl-12"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      <div>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+          <div className="relative lg:max-w-md lg:flex-1">
+            <Search className="pointer-events-none absolute left-5 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input
+              aria-label="Search conversations"
+              placeholder="Search conversations"
+              className="h-14 rounded-full pl-12"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:px-0 lg:pb-0" role="group" aria-label="Filter conversations">
+            {TABS.map(([id, label]) => (
+              <button
+                key={id}
+                aria-pressed={tab === id}
+                onClick={() => setTab(id)}
+                className={cn(
+                  "shrink-0 rounded-full px-5 py-2.5 text-[16px] font-medium",
+                  tab === id ? "bg-primary font-semibold text-white shadow-md shadow-teal/25" : "bg-white text-foreground/80 ring-1 ring-line hover:bg-mint-soft",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+        </div>
         </div>
 
-        <div className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:px-0" role="group" aria-label="Filter conversations">
-          {TABS.map(([id, label]) => (
-            <button
-              key={id}
-              aria-pressed={tab === id}
-              onClick={() => setTab(id)}
-              className={cn(
-                "shrink-0 rounded-full px-5 py-2.5 text-[16px] font-medium",
-                tab === id ? "bg-primary font-semibold text-white shadow-md shadow-teal/25" : "bg-white text-foreground/80 ring-1 ring-line hover:bg-mint-soft",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <ul className="mt-4 space-y-3">
+        <ul className="mt-5 grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
           {showCaregivers && bookings.isPending && <Skeleton className="h-24 rounded-xl" />}
           {showCaregivers && caregiverBookings.map((b) => <CaregiverRow key={b.caregiver_id} b={b} term={term} />)}
           {showCompanion && (

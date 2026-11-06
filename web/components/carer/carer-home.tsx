@@ -90,97 +90,103 @@ export function CarerHome() {
         <h1 className="text-[32px] font-bold leading-10">Your shift, {firstName(me.full_name)}</h1>
       </div>
 
-      {loading && <Skeleton className="h-64 rounded-xl" />}
+      <div className="grid items-start gap-5 xl:grid-cols-3">
+        <div className="space-y-4 xl:col-span-2">
+          {loading && <Skeleton className="h-64 rounded-xl" />}
 
-      {!loading && !id && (
-        <Card className="text-center">
-          <p className="text-[17px] font-bold">Finish your application</p>
-          <p className="ck-meta mt-1">Tell us about you and add two guarantors. We check everyone before they care for anyone.</p>
-          <Button asChild className="mt-3">
-            <Link href="/carer/apply">Start application</Link>
-          </Button>
-        </Card>
-      )}
+          {!loading && !id && (
+            <Card className="text-center">
+              <p className="text-[17px] font-bold">Finish your application</p>
+              <p className="ck-meta mt-1">Tell us about you and add two guarantors. We check everyone before they care for anyone.</p>
+              <Button asChild className="mt-3">
+                <Link href="/carer/apply">Start application</Link>
+              </Button>
+            </Card>
+          )}
 
-      {notApproved && (
-        <Card className="border-[#F2D9A4] bg-amber-soft">
-          <p className="font-bold text-amber-ink">Your application is being reviewed</p>
-          <p className="mt-1 text-[15px] text-amber-ink">
-            You&apos;ll be able to take bookings once CareKin has finished checking you. Status: {caregiver.status}.
-          </p>
-          <Link href="/carer/profile" className="mt-2 inline-block text-sm font-semibold underline">
-            See your checks
+          {notApproved && (
+            <Card className="border-[#F2D9A4] bg-amber-soft">
+              <p className="font-bold text-amber-ink">Your application is being reviewed</p>
+              <p className="mt-1 text-[15px] text-amber-ink">
+                You&apos;ll be able to take bookings once CareKin has finished checking you. Status: {caregiver.status}.
+              </p>
+              <Link href="/carer/profile" className="mt-2 inline-block text-sm font-semibold underline">
+                See your checks
+              </Link>
+            </Card>
+          )}
+
+          {noHours && (
+            <Card className="border-[#F2D9A4] bg-amber-soft">
+              <p className="font-bold text-amber-ink">Set your hours so families can find you</p>
+              <p className="mt-1 text-[15px] text-amber-ink">
+                You&apos;re approved, but no family can book you until you say which days and times you can work.
+              </p>
+              <Button asChild className="mt-3">
+                <Link href="/carer/profile">Set my hours</Link>
+              </Button>
+            </Card>
+          )}
+
+          {requests.length > 0 && (
+            <section aria-labelledby="req" className="space-y-3">
+              <h2 id="req" className="flex items-center gap-2 text-[19px] font-bold">
+                New requests <Badge variant="amber">{requests.length}</Badge>
+              </h2>
+              {requests.map((b) => (
+                <RequestCard key={b.id} b={b} />
+              ))}
+            </section>
+          )}
+
+          {active && shift ? (
+            <ShiftCard booking={active} shift={shift} />
+          ) : (
+            !loading &&
+            id &&
+            !notApproved && (
+              <Card className="text-center">
+                <p className="text-[17px] font-bold">{active ? "No shift today" : "No shifts coming up"}</p>
+                <p className="ck-meta mt-1">
+                  {active ? `Your next booking: ${bookingSummary(active)}` : "New bookings will show up here as families request you."}
+                </p>
+              </Card>
+            )
+          )}
+        </div>
+
+        <div className="space-y-4">
+          {upcoming.length > 0 && (
+            <section aria-labelledby="up" className="space-y-3">
+              <h2 id="up" className="text-[19px] font-bold">
+                Upcoming
+              </h2>
+              {upcoming.map((b) => (
+                <div key={b.id} className="ck-card flex items-center justify-between gap-3 p-4">
+                  <div className="min-w-0">
+                    <p className="font-bold">{bookingSummary(b)}</p>
+                    <p className="ck-meta truncate">{b.service_address}</p>
+                  </div>
+                </div>
+              ))}
+            </section>
+          )}
+
+          <Link
+            href="/carer/protocol"
+            className="flex items-center gap-3 rounded-xl border-[1.5px] border-[#F3B8BB] bg-crisis-soft p-4"
+          >
+            <span className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-white text-crisis" aria-hidden>
+              <TriangleAlert />
+            </span>
+            <span className="flex-1">
+              <span className="block text-[17px] font-bold text-crisis-ink">See crisis warning signs?</span>
+              <span className="text-[15px]">Follow the escalation protocol</span>
+            </span>
+            <ChevronRight className="size-5 text-crisis-ink" aria-hidden />
           </Link>
-        </Card>
-      )}
-
-      {noHours && (
-        <Card className="border-[#F2D9A4] bg-amber-soft">
-          <p className="font-bold text-amber-ink">Set your hours so families can find you</p>
-          <p className="mt-1 text-[15px] text-amber-ink">
-            You&apos;re approved, but no family can book you until you say which days and times you can work.
-          </p>
-          <Button asChild className="mt-3">
-            <Link href="/carer/profile">Set my hours</Link>
-          </Button>
-        </Card>
-      )}
-
-      {requests.length > 0 && (
-        <section aria-labelledby="req" className="space-y-3">
-          <h2 id="req" className="flex items-center gap-2 text-[19px] font-bold">
-            New requests <Badge variant="amber">{requests.length}</Badge>
-          </h2>
-          {requests.map((b) => (
-            <RequestCard key={b.id} b={b} />
-          ))}
-        </section>
-      )}
-
-      {active && shift ? (
-        <ShiftCard booking={active} shift={shift} />
-      ) : (
-        !loading &&
-        id &&
-        !notApproved && (
-          <Card className="text-center">
-            <p className="text-[17px] font-bold">{active ? "No shift today" : "No shifts coming up"}</p>
-            <p className="ck-meta mt-1">
-              {active ? `Your next booking: ${bookingSummary(active)}` : "New bookings will show up here as families request you."}
-            </p>
-          </Card>
-        )
-      )}
-
-      {upcoming.length > 0 && (
-        <section aria-labelledby="up" className="space-y-3">
-          <h2 id="up" className="text-[19px] font-bold">
-            Upcoming
-          </h2>
-          {upcoming.map((b) => (
-            <div key={b.id} className="ck-card flex items-center justify-between gap-3 p-4">
-              <div className="min-w-0">
-                <p className="font-bold">{bookingSummary(b)}</p>
-                <p className="ck-meta truncate">{b.service_address}</p>
-              </div>
-            </div>
-          ))}
-        </section>
-      )}
-
-      <Link
-        href="/carer/protocol"
-        className="flex items-center gap-3 rounded-xl border-[1.5px] border-[#F3B8BB] bg-crisis-soft p-4"
-      >
-        <span className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-white text-crisis" aria-hidden>
-          <TriangleAlert />
-        </span>
-        <span className="flex-1">
-          <span className="block text-[17px] font-bold text-crisis-ink">See crisis warning signs?</span>
-          <span className="text-[15px]">Follow the escalation protocol</span>
-        </span>
-        <ChevronRight className="size-5 text-crisis-ink" aria-hidden />
-      </Link>
+        </div>
+      </div>
     </div>
   );
 }

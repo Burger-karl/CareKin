@@ -84,6 +84,16 @@ export function telHref(phone: string) {
   return `tel:${phone.replace(/[^\d+]/g, "")}`;
 }
 
+/** Nigerian numbers typed any common way (0803..., 234803..., 803... or +234803...) to E.164. */
+export function toE164(raw: string) {
+  const phone = raw.trim().replace(/[\s()-]/g, "");
+  if (phone.startsWith("+")) return phone;
+  if (phone.startsWith("234")) return `+${phone}`;
+  if (phone.startsWith("0")) return phone.replace(/^0/, "+234");
+  if (/^\d{10}$/.test(phone)) return `+234${phone}`;
+  return phone;
+}
+
 export function newId() {
   return crypto.randomUUID();
 }

@@ -108,7 +108,7 @@ export function ApplyForm() {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-6" noValidate>
+    <form onSubmit={submit} className="max-w-3xl space-y-6" noValidate>
       <div>
         <h1 className="text-[30px] font-bold leading-9">Apply to give care</h1>
         <p className="mt-1 text-muted-foreground">

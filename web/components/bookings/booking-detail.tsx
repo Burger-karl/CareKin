@@ -161,7 +161,7 @@ export function BookingDetail({ id }: { id: string }) {
     onError: (e) => toast.error(errorMessage(e)),
   });
 
-  if (booking.isPending) return <Skeleton className="mx-auto h-96 max-w-xl rounded-xl" />;
+  if (booking.isPending) return <Skeleton className="h-96 rounded-xl" />;
   if (booking.isError || !b) {
     return (
       <Card className="mx-auto max-w-xl text-center">
@@ -181,7 +181,7 @@ export function BookingDetail({ id }: { id: string }) {
   const canPay = b.access === "patient_side";
 
   return (
-    <div className="mx-auto max-w-xl space-y-4 lg:mx-0">
+    <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Button asChild variant="ghost" size="icon" aria-label="Back to bookings">
           <Link href="/bookings">
@@ -191,135 +191,148 @@ export function BookingDetail({ id }: { id: string }) {
         <h1 className="text-[19px] font-bold">Booking #{b.id.slice(0, 8).toUpperCase()}</h1>
       </div>
 
-      <Card className="flex items-center gap-3.5">
-        <Avatar label={initials(name)} tone={toneFor(name)} className="size-14 text-lg" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[19px] font-bold">{name}</p>
-          <p className="ck-meta text-[15px]">{bookingSummary(b)}</p>
-        </div>
-        <Badge variant={st.variant} className="shrink-0 text-xs font-semibold">
-          {st.label}
-        </Badge>
-      </Card>
-
-      {/* What needs doing next */}
-      {b.status === "requested" && canAct && (
-        <Card>
-          <p className="text-body">
-            Waiting for <span className="font-bold">{name}</span> to accept. You&apos;ll be able to pay as soon as they do.
-          </p>
-          <Button variant="outline" className="mt-3" onClick={() => cancel.mutate()} loading={cancel.isPending}>
-            Cancel request
-          </Button>
-        </Card>
-      )}
-      {b.status === "pending_guardian" && (
-        <Card>
-          <p className="text-body">
-            {approvals.data?.some((a) => a.decision === "approved")
-              ? "A guardian has approved. Waiting for the caregiver."
-              : "A guardian must approve a caregiver for anyone under 18 before we ask them."}
-          </p>
-          {me.role === "guardian" && (
-            <div className="mt-3 flex gap-3">
-              <Button onClick={() => approve.mutate("approved")} loading={approve.isPending}>
-                Approve
-              </Button>
-              <Button variant="outline" onClick={() => approve.mutate("rejected")} disabled={approve.isPending}>
-                Decline
-              </Button>
+      <div className="grid items-start gap-5 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-2">
+          <Card className="flex items-center gap-3.5">
+            <Avatar label={initials(name)} tone={toneFor(name)} className="size-14 text-lg" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[19px] font-bold">{name}</p>
+              <p className="ck-meta text-[15px]">{bookingSummary(b)}</p>
             </div>
+            <Badge variant={st.variant} className="shrink-0 text-xs font-semibold">
+              {st.label}
+            </Badge>
+          </Card>
+
+          {/* What needs doing next */}
+          {b.status === "requested" && canAct && (
+            <Card>
+              <p className="text-body">
+                Waiting for <span className="font-bold">{name}</span> to accept. You&apos;ll be able to pay as soon as they do.
+              </p>
+              <Button variant="outline" className="mt-3" onClick={() => cancel.mutate()} loading={cancel.isPending}>
+                Cancel request
+              </Button>
+            </Card>
           )}
-        </Card>
-      )}
-      {b.status === "accepted" && canPay && <PayPanel booking={b} />}
-      {b.status === "accepted" && !canPay && (
-        <Card>
-          <p className="text-body">Accepted. Waiting for payment.</p>
-        </Card>
-      )}
-      {b.status === "declined" && (
-        <Card>
-          <p className="text-body">{name} can&apos;t take this booking.</p>
-          <Button asChild className="mt-3" variant="secondary">
-            <Link href="/caregivers">Find another caregiver</Link>
-          </Button>
-        </Card>
-      )}
-
-      {shifts.data && shifts.data.length > 0 && !["declined", "cancelled"].includes(b.status) && (
-        <EscrowCard booking={b} shifts={shifts.data} status={escrow} />
-      )}
-
-      {b.status === "completed" && escrow === "held" && canAct && (
-        <Card className="border-[#F2D9A4] bg-amber-soft">
-          <h2 className="text-[19px] font-bold">Care is complete</h2>
-          <p className="mt-1 text-[15px] text-amber-ink">
-            Every shift is done. Confirm to release {formatMoney(b.total_minor, b.currency)} to {name}. If you do nothing, a
-            clean booking is released automatically 24 hours after the last check-out.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Button size="lg" onClick={() => release.mutate()} loading={release.isPending}>
-              Confirm &amp; release
-            </Button>
-            <Button size="lg" variant="amber" onClick={() => setIncident("dispute")}>
-              Something&apos;s wrong
-            </Button>
-          </div>
-        </Card>
-      )}
-      {b.status === "completed" && escrow === "released" && canAct && !iRated && (
-        <Card>
-          <p className="text-body">Payment released. How was the care?</p>
-          <Button className="mt-3" variant="secondary" onClick={() => setReviewOpen(true)}>
-            Rate {name.split(" ")[0]}
-          </Button>
-        </Card>
-      )}
-      {b.status === "disputed" && (
-        <Card className="border-[#F3B8BB] bg-crisis-soft">
-          <p className="font-bold text-crisis-ink">Payment is on hold</p>
-          <p className="mt-1 text-[15px]">CareKin is reviewing this booking. We&apos;ll contact you.</p>
-        </Card>
-      )}
-
-      {noteShift && (
-        <Card>
-          <CardHeader className="mb-2">
-            <CardTitle>{noteShift.status === "in_progress" ? "Today's care notes" : "Latest care notes"}</CardTitle>
-            {noteShift.actual_start && <span className="text-meta font-semibold text-teal">Since {formatTime(noteShift.actual_start)}</span>}
-          </CardHeader>
-          {notes.isPending ? (
-            <Skeleton className="h-16" />
-          ) : notes.data && notes.data.length > 0 ? (
-            <ul className="divide-y divide-line">
-              {[...notes.data]
-                .sort((a, z) => +new Date(z.created_at) - +new Date(a.created_at))
-                .map((n) => (
-                  <li key={n.id} className="flex gap-4 py-3 first:pt-1 last:pb-0">
-                    <time dateTime={n.created_at} className="w-20 shrink-0 text-[15px] font-semibold text-muted-foreground">
-                      {formatTime(n.created_at)}
-                    </time>
-                    <p className="text-[16px] leading-snug">{n.body}</p>
-                  </li>
-                ))}
-            </ul>
-          ) : (
-            <p className="text-body text-muted-foreground">No notes yet. The caregiver adds them during the shift.</p>
+          {b.status === "pending_guardian" && (
+            <Card>
+              <p className="text-body">
+                {approvals.data?.some((a) => a.decision === "approved")
+                  ? "A guardian has approved. Waiting for the caregiver."
+                  : "A guardian must approve a caregiver for anyone under 18 before we ask them."}
+              </p>
+              {me.role === "guardian" && (
+                <div className="mt-3 flex gap-3">
+                  <Button onClick={() => approve.mutate("approved")} loading={approve.isPending}>
+                    Approve
+                  </Button>
+                  <Button variant="outline" onClick={() => approve.mutate("rejected")} disabled={approve.isPending}>
+                    Decline
+                  </Button>
+                </div>
+              )}
+            </Card>
           )}
-        </Card>
-      )}
+          {b.status === "accepted" && canPay && <PayPanel booking={b} />}
+          {b.status === "accepted" && !canPay && (
+            <Card>
+              <p className="text-body">Accepted. Waiting for payment.</p>
+            </Card>
+          )}
+          {b.status === "declined" && (
+            <Card>
+              <p className="text-body">{name} can&apos;t take this booking.</p>
+              <Button asChild className="mt-3" variant="secondary">
+                <Link href="/caregivers">Find another caregiver</Link>
+              </Button>
+            </Card>
+          )}
 
-      {!["declined", "cancelled", "requested", "pending_guardian"].includes(b.status) && (
-        <Button
-          variant="crisis-outline"
-          size="lg"
-          className="h-14 w-full text-[16px]"
-          onClick={() => setIncident("concern")}
-        >
-          <Flag /> Report a safety concern
-        </Button>
-      )}
+          {b.status === "completed" && escrow === "held" && canAct && (
+            <Card className="border-[#F2D9A4] bg-amber-soft">
+              <h2 className="text-[19px] font-bold">Care is complete</h2>
+              <p className="mt-1 text-[15px] text-amber-ink">
+                Every shift is done. Confirm to release {formatMoney(b.total_minor, b.currency)} to {name}. If you do nothing, a
+                clean booking is released automatically 24 hours after the last check-out.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Button size="lg" onClick={() => release.mutate()} loading={release.isPending}>
+                  Confirm &amp; release
+                </Button>
+                <Button size="lg" variant="amber" onClick={() => setIncident("dispute")}>
+                  Something&apos;s wrong
+                </Button>
+              </div>
+            </Card>
+          )}
+          {b.status === "completed" && escrow === "released" && canAct && !iRated && (
+            <Card>
+              <p className="text-body">Payment released. How was the care?</p>
+              <Button className="mt-3" variant="secondary" onClick={() => setReviewOpen(true)}>
+                Rate {name.split(" ")[0]}
+              </Button>
+            </Card>
+          )}
+          {b.status === "disputed" && (
+            <Card className="border-[#F3B8BB] bg-crisis-soft">
+              <p className="font-bold text-crisis-ink">Payment is on hold</p>
+              <p className="mt-1 text-[15px]">CareKin is reviewing this booking. We&apos;ll contact you.</p>
+            </Card>
+          )}
+
+          {noteShift && (
+            <Card>
+              <CardHeader className="mb-2">
+                <CardTitle>{noteShift.status === "in_progress" ? "Today's care notes" : "Latest care notes"}</CardTitle>
+                {noteShift.actual_start && <span className="text-meta font-semibold text-teal">Since {formatTime(noteShift.actual_start)}</span>}
+              </CardHeader>
+              {notes.isPending ? (
+                <Skeleton className="h-16" />
+              ) : notes.data && notes.data.length > 0 ? (
+                <ul className="divide-y divide-line">
+                  {[...notes.data]
+                    .sort((a, z) => +new Date(z.created_at) - +new Date(a.created_at))
+                    .map((n) => (
+                      <li key={n.id} className="flex gap-4 py-3 first:pt-1 last:pb-0">
+                        <time dateTime={n.created_at} className="w-20 shrink-0 text-[15px] font-semibold text-muted-foreground">
+                          {formatTime(n.created_at)}
+                        </time>
+                        <p className="text-[16px] leading-snug">{n.body}</p>
+                      </li>
+                    ))}
+                </ul>
+              ) : (
+                <p className="text-body text-muted-foreground">No notes yet. The caregiver adds them during the shift.</p>
+              )}
+            </Card>
+          )}
+        </div>
+
+        <aside className="space-y-4">
+          {shifts.data && shifts.data.length > 0 && !["declined", "cancelled"].includes(b.status) && (
+            <EscrowCard booking={b} shifts={shifts.data} status={escrow} />
+          )}
+          {!["declined", "cancelled", "requested", "pending_guardian"].includes(b.status) && (
+            <Button
+              variant="crisis-outline"
+              size="lg"
+              className="h-14 w-full text-[16px]"
+              onClick={() => setIncident("concern")}
+            >
+              <Flag /> Report a safety concern
+            </Button>
+          )}
+          {(!shifts.data || shifts.data.length === 0 || ["declined", "cancelled"].includes(b.status)) && (
+            <Card tone="soft">
+              <CardTitle className="mb-1">How payment works</CardTitle>
+              <p className="ck-meta">
+                You pay into escrow once the caregiver accepts. CareKin holds it and releases it to them only after every shift is done.
+              </p>
+            </Card>
+          )}
+        </aside>
+      </div>
 
       <IncidentDialog
         bookingId={id}

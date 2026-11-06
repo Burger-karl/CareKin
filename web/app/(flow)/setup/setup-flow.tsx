@@ -13,13 +13,14 @@ import { ApiError, api, errorMessage } from "@/lib/api/client";
 import { keys, useMe, usePatients } from "@/lib/api/queries";
 import { SKIP_SETUP_KEY } from "@/lib/storage";
 import type { GeoPoint, Patient } from "@/lib/types";
+import { toE164 } from "@/lib/utils";
 
 const GENOTYPES = ["SS", "SC", "SB+", "SB0", "AS", "AA"];
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
 type Errors = Record<string, string>;
 
-function FamilyCard({ userId }: { userId: string }) {
+function FamilyCard({ phone }: { phone: string }) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   return (
@@ -27,26 +28,26 @@ function FamilyCard({ userId }: { userId: string }) {
       <div>
         <h1 className="text-title font-bold leading-tight">Follow a family member</h1>
         <p className="mt-2 text-muted-foreground">
-          The person you support adds you from their CareKin account. Send them your CareKin ID below. You&apos;ll see
-          only what they choose to share.
+          Ask the person you support to add you as an emergency contact with this phone number, then turn on app access
+          in their Settings. You&apos;ll see only what they choose to share.
         </p>
       </div>
       <div className="ck-card space-y-3 p-5">
-        <p className="ck-label">Your CareKin ID</p>
-        <code className="block break-all rounded-lg bg-mint-soft px-3 py-3 text-[15px]">{userId}</code>
+        <p className="ck-label">Your phone number</p>
+        <code className="block break-all rounded-lg bg-mint-soft px-3 py-3 text-[15px]">{phone}</code>
         <Button
           variant="secondary"
           onClick={async () => {
             try {
-              await navigator.clipboard.writeText(userId);
+              await navigator.clipboard.writeText(phone);
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             } catch {
-              toast.error("Copy failed. Select the ID and copy it.");
+              toast.error("Copy failed. Select the number and copy it.");
             }
           }}
         >
-          {copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy ID"}
+          {copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy number"}
         </Button>
       </div>
       <Button
@@ -108,7 +109,7 @@ export function SetupFlow() {
   }, [me.data, isChild]);
 
   if (!me.data || patients.isPending) return <PageSpinner />;
-  if (mode === "family" && isChild) return <FamilyCard userId={me.data.id} />;
+  if (mode === "family" && isChild) return <FamilyCard phone={me.data.phone} />;
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -173,20 +174,10 @@ export function SetupFlow() {
         });
       }
       if (form.contact_name.trim()) {
-        const phone = form.contact_phone.trim().replace(/[\s-]/g, "");
         await api(`patients/${id}/emergency-contacts`, {
           body: {
             name: form.contact_name.trim(),
-            // Nigerian numbers typed any common way: 0803..., 234803..., 803... or +234803...
-            phone: phone.startsWith("+")
-              ? phone
-              : phone.startsWith("234")
-                ? `+${phone}`
-                : phone.startsWith("0")
-                  ? phone.replace(/^0/, "+234")
-                  : /^\d{10}$/.test(phone)
-                    ? `+234${phone}`
-                    : phone,
+            phone: toE164(form.contact_phone),
             relationship: form.contact_relationship.trim() || "contact",
             priority: 1,
           },

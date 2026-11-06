@@ -163,3 +163,8 @@ class FamilyLink(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         JSONB, default=dict, server_default=text("'{}'::jsonb")
     )
     can_fund: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    # The emergency contact this access was granted from, if any. Removing the
+    # contact removes the access too (see service.remove_emergency_contact).
+    emergency_contact_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("emergency_contacts.id", ondelete="SET NULL"), index=True, unique=True
+    )

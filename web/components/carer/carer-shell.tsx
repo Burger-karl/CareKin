@@ -84,7 +84,7 @@ export function CarerShell({ children }: { children: React.ReactNode }) {
         )
       }
     >
-      <div className="mx-auto w-full max-w-3xl">{children}</div>
+      {children}
     </DashFrame>
   );
 }

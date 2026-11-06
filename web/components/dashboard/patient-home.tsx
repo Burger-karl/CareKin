@@ -3,12 +3,11 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Download, FileText, MapPin, Navigation, Plus, Share2, Zap } from "lucide-react";
+import { ArrowUpRight, Download, FileText, MapPin, Navigation, Share2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, toneFor } from "@/components/brand";
 import { CrisisButton } from "@/components/crisis/crisis-button";
 import { DeviceSetupCard } from "@/components/crisis/device-setup";
-import { FamilyDialog } from "@/components/dashboard/family-dialog";
 import { is24hEmergency, serviceTags } from "@/components/facilities/facility-card";
 import { FacilityMapDialog } from "@/components/facilities/facility-map";
 import { useSession } from "@/components/session/session";
@@ -196,7 +195,6 @@ export function PatientHome() {
   const shares = useShares(patientId);
   const links = useFamilyLinks(patientId, patient?.access !== "family");
   const bookings = useBookings();
-  const [familyOpen, setFamilyOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [mapFor, setMapFor] = useState<Facility | null>(null);
 
@@ -305,10 +303,10 @@ export function PatientHome() {
           title="Emergency contacts"
           badge="Alerts"
           value={contacts.isPending ? "–" : (contacts.data?.length ?? 0)}
-          note={`${links.data?.length ?? 0} family following`}
+          note={`${links.data?.length ?? 0} with app access`}
           progress={Math.min(1, (contacts.data?.length ?? 0) / 3)}
           color="blue"
-          href="/settings"
+          href="/settings#contacts"
         />
       </div>
 
@@ -411,8 +409,8 @@ export function PatientHome() {
         </Card>
       </div>
 
-      {/* Passport, activity, family */}
-      <div className="grid gap-5 xl:grid-cols-3">
+      {/* Passport, activity */}
+      <div className="grid gap-5 xl:grid-cols-2">
         <Card>
           <div className="mb-4 flex items-center justify-between">
             <CardTitle>Health passport</CardTitle>
@@ -462,39 +460,6 @@ export function PatientHome() {
             </ul>
           )}
         </Card>
-
-        {patient.access !== "family" && (
-          <Card>
-            <div className="mb-4 flex items-center justify-between">
-              <CardTitle>Family access</CardTitle>
-              <button onClick={() => setFamilyOpen(true)} className="text-sm font-medium text-teal hover:underline">
-                Manage
-              </button>
-            </div>
-            {links.isPending ? (
-              <Skeleton className="h-12" />
-            ) : links.data && links.data.length > 0 ? (
-              <ul className="space-y-3">
-                {links.data.map((l) => (
-                  <li key={l.id} className="flex items-center gap-3">
-                    <Avatar label="FM" tone="blue" className="size-9 text-xs" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-800">Family member</p>
-                      <p className="text-xs">{l.can_fund ? "Can fund care" : "Follows care"}</p>
-                    </div>
-                    <span className="text-xs font-medium text-teal">{l.share_scope.health_data ? "Sees reports" : "Basic"}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm">Nobody follows this care yet.</p>
-            )}
-            <Button variant="secondary" size="sm" className="mt-4" onClick={() => setFamilyOpen(true)}>
-              <Plus /> Add family member
-            </Button>
-            <FamilyDialog patientId={patient.id} open={familyOpen} onOpenChange={setFamilyOpen} />
-          </Card>
-        )}
       </div>
 
       <FacilityMapDialog facility={mapFor} onClose={() => setMapFor(null)} />
