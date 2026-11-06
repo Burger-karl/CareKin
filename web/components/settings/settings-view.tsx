@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { LogOut, MapPin, ShieldCheck, SlidersHorizontal, UserRound } from "lucide-react";
+import { MapPin, ShieldCheck, SlidersHorizontal, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { CrisisDevicesCard } from "@/components/crisis/device-setup";
 import { PlaceDialog } from "@/components/location/place-dialog";
@@ -26,7 +26,7 @@ const CONSENTS: { type: ConsentType; title: string; body: string; required?: boo
 ];
 
 export function SettingsView() {
-  const { me, patient, signOut } = useSession();
+  const { me, patient } = useSession();
   const [placeOpen, setPlaceOpen] = useState(false);
   const qc = useQueryClient();
   const [name, setName] = useState(me.full_name);
@@ -165,12 +165,6 @@ export function SettingsView() {
             ))}
           </ul>
         </Card>
-
-        <div className="xl:col-span-3">
-          <Button variant="outline" onClick={() => void signOut()}>
-            <LogOut /> Sign out
-          </Button>
-        </div>
       </div>
     </div>
   );

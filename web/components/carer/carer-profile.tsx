@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Check, Clock, LogOut } from "lucide-react";
+import { Check, Clock } from "lucide-react";
 import { AvailabilityCard } from "@/components/carer/availability-card";
 import { WorkAreaCard } from "@/components/carer/work-area-card";
 import { useSession } from "@/components/session/session";
@@ -15,7 +15,7 @@ import { formatMoney, humanize } from "@/lib/utils";
 const CHECK_LABEL: Record<string, string> = { nin: "NIN check", background: "Background check" };
 
 export function CarerProfile() {
-  const { me, signOut } = useSession();
+  const { me } = useSession();
   const { caregiver, id, loading } = useMyCaregiver();
 
   return (
@@ -66,10 +66,6 @@ export function CarerProfile() {
               </ul>
             </Card>
           )}
-
-          <Button variant="outline" onClick={() => void signOut()}>
-            <LogOut /> Sign out
-          </Button>
         </div>
 
         <div className="space-y-4 xl:col-span-2">
