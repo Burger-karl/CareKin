@@ -34,12 +34,18 @@ export function PlaceDialog({
   onOpenChange,
   patientId,
   onUse,
+  title = "Where do you need care?",
+  description = "Caregivers only show when your location is inside the area they cover.",
+  useLabel = "Search caregivers here",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** When given, the person can save the spot as this patient's home location. */
   patientId?: string;
   onUse?: (point: GeoPoint, label: string) => void;
+  title?: string;
+  description?: string;
+  useLabel?: string;
 }) {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
@@ -101,9 +107,9 @@ export function PlaceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Where do you need care?</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Caregivers only show when your location is inside the area they cover.
+            {description}
           </DialogDescription>
         </DialogHeader>
 
@@ -170,7 +176,7 @@ export function PlaceDialog({
                   onOpenChange(false);
                 }}
               >
-                Search caregivers here
+                {useLabel}
               </Button>
             )}
             {patientId && (

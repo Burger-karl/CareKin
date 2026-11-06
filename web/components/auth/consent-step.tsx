@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import type { ConsentType, UserRole } from "@/lib/types";
 
 export interface WhoOption {
-  id: "myself" | "child" | "family" | "caregiver";
+  id: "myself" | "child" | "family" | "caregiver" | "facility";
   title: string;
   sub: string;
   role: UserRole;
@@ -19,6 +19,7 @@ export const WHO_OPTIONS: WhoOption[] = [
   { id: "child", title: "My child", sub: "I'm a guardian of a minor", role: "guardian" },
   { id: "family", title: "Family abroad", sub: "I fund and follow care", role: "guardian" },
   { id: "caregiver", title: "Caregiver", sub: "Apply to give care", role: "caregiver" },
+  { id: "facility", title: "Hospital or clinic", sub: "List your facility so patients can find it in a crisis", role: "facility_admin" },
 ];
 
 interface ConsentRow {
@@ -29,6 +30,8 @@ interface ConsentRow {
 }
 
 function rowsFor(who: WhoOption["id"]): ConsentRow[] {
+  // A facility admin only manages a listing: no health data or location is collected.
+  if (who === "facility") return [];
   if (who === "caregiver") {
     return [
       { type: "location", title: "Location, during shifts", body: "GPS check-in and check-out at the care address." },
@@ -59,6 +62,7 @@ export interface ConsentResult {
 export function ConsentStep({
   subtitle,
   fixedWho,
+  initialWho,
   submitting,
   onSubmit,
   step = "Step 2 of 3",
@@ -66,12 +70,14 @@ export function ConsentStep({
 }: {
   subtitle?: string;
   fixedWho?: WhoOption["id"];
+  /** Pre-selected choice, e.g. from a "List your hospital" link. */
+  initialWho?: WhoOption["id"];
   submitting?: boolean;
   onSubmit: (r: ConsentResult) => void;
   step?: string | null;
   error?: string | null;
 }) {
-  const [whoId, setWhoId] = useState<WhoOption["id"]>(fixedWho ?? "myself");
+  const [whoId, setWhoId] = useState<WhoOption["id"]>(fixedWho ?? initialWho ?? "myself");
   const who = WHO_OPTIONS.find((w) => w.id === whoId)!;
   const rows = rowsFor(whoId);
   const [checked, setChecked] = useState<Record<string, boolean>>({
@@ -80,7 +86,8 @@ export function ConsentStep({
     llm_processing: false,
   });
 
-  const needsHealth = who.role !== "caregiver";
+  // Only setting up care for a patient needs the health-data consent.
+  const needsHealth = who.role === "patient" || who.role === "guardian";
   const healthOk = !needsHealth || checked.health_data;
 
   return (
@@ -114,6 +121,7 @@ export function ConsentStep({
                 onClick={() => setWhoId(o.id)}
                 className={cn(
                   "rounded-xl border-[1.5px] bg-white p-4 text-left transition-colors",
+                  o.id === "facility" && "col-span-2",
                   on ? "border-primary bg-mint" : "border-line hover:border-[#9DC9C3]",
                 )}
               >
@@ -129,6 +137,11 @@ export function ConsentStep({
         <h2 id="collect-heading" className="mb-4 text-[17px] font-bold">
           What we collect &amp; why
         </h2>
+        {rows.length === 0 && (
+          <p className="text-[15px] leading-snug text-muted-foreground">
+            Only your name and phone number, to manage your facility&apos;s listing. No health information is collected.
+          </p>
+        )}
         <ul className="space-y-4">
           {rows.map((r) => (
             <li key={r.type} className="flex items-start gap-3">

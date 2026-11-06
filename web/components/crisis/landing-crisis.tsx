@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MapPin, Phone, ShieldCheck, TriangleAlert, Zap } from "lucide-react";
+import { CrisisMap } from "@/components/crisis/crisis-map";
 import { FacilityCard, alertLabel } from "@/components/crisis/crisis-screen";
 import { Starburst } from "@/components/marketing/starburst";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -260,6 +261,16 @@ export function LandingCrisis({
             )}
           </div>
           <CallButton />
+          {phase.event.nearby && phase.event.nearby.facilities.length > 0 && (
+            <CrisisMap
+              you={
+                phase.event.location.latitude != null && phase.event.location.longitude != null
+                  ? { latitude: phase.event.location.latitude, longitude: phase.event.location.longitude }
+                  : null
+              }
+              facilities={phase.event.nearby.facilities}
+            />
+          )}
           {phase.event.nearby?.facilities.slice(0, 2).map((f, i) => <FacilityCard key={f.id} f={f} primary={i === 0} />)}
           <div className="flex flex-col items-center gap-2 pt-1">
             <button type="button" className="text-[15px] font-semibold text-crisis-ink underline" onClick={() => void cancelSent(phase.event)}>

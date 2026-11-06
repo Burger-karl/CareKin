@@ -11,7 +11,7 @@ export default function DashboardPage() {
   const { me, patient } = useSession();
 
   useEffect(() => {
-    if (me.role === "facility_admin") router.replace("/facilities");
+    if (me.role === "facility_admin") router.replace("/facility");
   }, [me.role, router]);
 
   if (me.role === "facility_admin") return null;

@@ -150,3 +150,38 @@
     animation: none;
   }
 }
+
+/* The "you are here" dot on maps. */
+@keyframes ck-you-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+.ck-you-pulse {
+  animation: ck-you-pulse 1.8s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ck-you-pulse {
+    animation: none;
+  }
+}
+
+/* Leaflet tooltips in the app's style. */
+.leaflet-tooltip {
+  border: 1px solid rgb(226 232 240);
+  border-radius: 0.5rem;
+  padding: 6px 10px;
+  font: 500 13px/1.35 var(--font-app, system-ui), system-ui, sans-serif;
+  color: #1e293b;
+  box-shadow: 0 8px 20px -8px rgba(15, 23, 42, 0.35);
+}
+
+/* Softer map tiles, closer to the app's colours. */
+.ck-map-tiles {
+  filter: saturate(0.7) contrast(0.95) brightness(1.04);
+}

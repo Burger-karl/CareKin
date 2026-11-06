@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import {
+  Building2,
   CalendarDays,
   FileText,
   LayoutGrid,
@@ -25,7 +26,11 @@ import type { Booking, UserRole } from "@/lib/types";
 
 function sectionsFor(role: UserRole, canSeePassport: boolean): DashNavSection[] {
   if (role === "facility_admin") {
-    return [{ label: "Menu", items: [{ href: "/facilities", label: "Facilities", icon: MapPin }] }];
+    return [
+      { label: "Menu", items: [{ href: "/facility", label: "My facility", icon: Building2 }] },
+      { label: "Directory", items: [{ href: "/facilities", label: "Find facilities", icon: MapPin }] },
+      { label: "Account", items: [{ href: "/settings", label: "Settings", icon: Settings }] },
+    ];
   }
   const care: DashNavSection["items"] = [];
   if (role !== "family_abroad") care.push({ href: "/caregivers", label: "Caregivers", icon: Users });
@@ -128,8 +133,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <DashFrame
-      homeHref="/dashboard"
-      product={me.role === "family_abroad" ? "Family" : me.role === "guardian" ? "Guardian" : "Patient"}
+      homeHref={me.role === "facility_admin" ? "/facility" : "/dashboard"}
+      product={
+        me.role === "facility_admin" ? "Facility" : me.role === "family_abroad" ? "Family" : me.role === "guardian" ? "Guardian" : "Patient"
+      }
       sections={sections}
       sidebarFooter={
         showCrisis && (

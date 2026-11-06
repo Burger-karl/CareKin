@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, MapPin, Navigation, Phone, ShieldCheck, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "@/components/session/session";
+import { CrisisMap } from "@/components/crisis/crisis-map";
 import { ResolveDialog } from "@/components/crisis/resolve-dialog";
 import { CrisisButton } from "@/components/crisis/crisis-button";
 import { Badge } from "@/components/ui/badge";
@@ -378,6 +379,14 @@ export function CrisisScreen() {
 
         {list.length > 0 ? (
           <>
+            <CrisisMap
+              you={
+                data?.location.latitude != null && data.location.longitude != null
+                  ? { latitude: data.location.latitude, longitude: data.location.longitude }
+                  : null
+              }
+              facilities={list}
+            />
             <FacilityCard f={list[0]} primary />
             {list.slice(1, 4).map((f) => (
               <a

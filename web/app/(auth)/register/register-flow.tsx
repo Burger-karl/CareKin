@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ConsentStep, type ConsentResult } from "@/components/auth/consent-step";
+import { ConsentStep, WHO_OPTIONS, type ConsentResult, type WhoOption } from "@/components/auth/consent-step";
 import { OtpForm } from "@/components/auth/otp-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,12 @@ export function RegisterFlow() {
   const [reg, setReg] = useState<Registered | null>(null);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // "/register?as=facility" (from "List your hospital") opens on that choice.
+  const [initialWho, setInitialWho] = useState<WhoOption["id"] | undefined>();
+  useEffect(() => {
+    const as = new URLSearchParams(window.location.search).get("as");
+    if (WHO_OPTIONS.some((w) => w.id === as)) setInitialWho(as as WhoOption["id"]);
+  }, []);
 
   function details(e: React.FormEvent) {
     e.preventDefault();
@@ -107,6 +113,8 @@ export function RegisterFlow() {
       router.replace("/onboarding?resume=1");
     } else if (user.role === "caregiver") {
       router.replace("/carer/apply");
+    } else if (user.role === "facility_admin") {
+      router.replace("/facility");
     } else {
       router.replace(choice.who.id === "family" ? "/setup?mode=family" : "/setup");
     }
@@ -163,6 +171,7 @@ export function RegisterFlow() {
         <>
           <ConsentStep
             subtitle={`Phone ${maskPhone(phone)}`}
+            initialWho={initialWho}
             submitting={busy}
             onSubmit={register}
             error={formError}

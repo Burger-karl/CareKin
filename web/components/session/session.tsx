@@ -33,7 +33,7 @@ export function homeFor(role: UserRole) {
     case "ops":
       return "/ops";
     case "facility_admin":
-      return "/facilities";
+      return "/facility";
     default:
       return "/dashboard";
   }

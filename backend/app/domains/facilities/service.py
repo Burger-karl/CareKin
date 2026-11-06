@@ -161,6 +161,14 @@ async def create_facility(
     return facility
 
 
+async def facilities_claimed_by(db: AsyncSession, user_id: uuid.UUID) -> list[Facility]:
+    """Facilities a facility admin registered, newest first."""
+    result = await db.scalars(
+        select(Facility).where(Facility.claimed_by == user_id).order_by(Facility.created_at.desc())
+    )
+    return list(result)
+
+
 async def get_facility(
     db: AsyncSession,
     facility_id: uuid.UUID,
