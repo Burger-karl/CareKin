@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Bell, Maximize2, Menu as MenuIcon, Minimize2, PanelLeftClose, PanelLeftOpen, X, type LucideIcon } from "lucide-react";
+import { Bell, LogOut, Maximize2, Menu as MenuIcon, Minimize2, PanelLeftClose, PanelLeftOpen, X, type LucideIcon } from "lucide-react";
 import * as Popover from "@radix-ui/react-dropdown-menu";
 import { LogoMark, LogoWordmark } from "@/components/brand";
+import { useSession } from "@/components/session/session";
 import { appFont } from "@/lib/fonts";
 import { cn } from "@/lib/utils";
 
@@ -145,6 +146,7 @@ export function DashFrame({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { signOut } = useSession();
   const [open, setOpen] = useState(false);
   // Desktop only: shrink the sidebar to an icon rail. Remembered per browser.
   const [collapsed, setCollapsed] = useState(false);
@@ -255,7 +257,23 @@ export function DashFrame({
             ))}
           </ul>
         </nav>
-        {sidebarFooter && <div className={cn("shrink-0 p-4", collapsed && "lg:px-3")}>{sidebarFooter}</div>}
+        <div className={cn("flex shrink-0 flex-col gap-3 border-t border-white/10 p-4", collapsed && "lg:px-3")}>
+          {sidebarFooter}
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            title={collapsed ? "Sign out" : undefined}
+            className={cn(
+              "group flex items-center gap-3.5 rounded-md px-3 py-2 text-sm font-medium text-white/75 transition-colors hover:bg-white/5 hover:text-white",
+              collapsed && "lg:justify-center lg:px-0",
+            )}
+          >
+            <span className="flex size-8 items-center justify-center rounded-md bg-white/5 text-white/80 group-hover:text-white" aria-hidden>
+              <LogOut className="size-[18px]" />
+            </span>
+            <span className={cn("flex-1 text-left", collapsed && "lg:sr-only")}>Sign out</span>
+          </button>
+        </div>
       </aside>
 
       {open && <button type="button" aria-label="Close menu" className="fixed inset-0 z-40 bg-slate-900/50 lg:hidden" onClick={() => setOpen(false)} />}
