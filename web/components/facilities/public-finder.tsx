@@ -4,6 +4,7 @@ import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { LocateFixed, Phone } from "lucide-react";
 import { FacilityCardFull } from "@/components/facilities/facility-card";
+import { FacilitiesMapView, ViewSwitch } from "@/components/facilities/facilities-map-view";
 import { Chip, FILTERS, PAGE } from "@/components/facilities/finder";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ export function PublicFinder() {
   const [services, setServices] = useState<string[]>([]);
   const [q, setQ] = useState("");
   const [limit, setLimit] = useState(PAGE);
+  const [view, setView] = useState<"list" | "map">("map");
 
   const query = q.trim().length >= 2 ? q.trim() : undefined;
   const filter = {
@@ -40,7 +42,8 @@ export function PublicFinder() {
   const total = results.data?.total ?? 0;
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div>
+      <div className="mx-auto max-w-2xl">
       <a
         href="tel:112"
         className="flex items-center gap-3 rounded-xl bg-crisis-soft p-4 font-bold text-crisis-ink hover:brightness-95"
@@ -51,7 +54,10 @@ export function PublicFinder() {
         </span>
       </a>
 
-      <h1 className="mt-6 text-title font-bold">Find an SCD facility</h1>
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-title font-bold">Find an SCD facility</h1>
+        <ViewSwitch view={view} onChange={setView} />
+      </div>
       <p className="mt-1 text-muted-foreground">
         Places CareKin has checked that can treat a sickle cell crisis. No account needed.
       </p>
@@ -93,7 +99,9 @@ export function PublicFinder() {
         ))}
       </div>
 
-      <div className="mt-5 space-y-4" aria-busy={results.isFetching}>
+      </div>
+
+      <div className={view === "map" ? "mt-5 space-y-4" : "mx-auto mt-5 max-w-2xl space-y-4"} aria-busy={results.isFetching}>
         {results.isPending && (
           <>
             <Skeleton className="h-44 rounded-xl" />
@@ -115,9 +123,11 @@ export function PublicFinder() {
             <p className="ck-meta mt-1">Only facilities CareKin has checked appear here.</p>
           </div>
         )}
-        {items.map((r) => (
-          <FacilityCardFull key={r.facility.id} r={r} canShare={false} />
-        ))}
+        {view === "map" && results.isSuccess && items.length > 0 ? (
+          <FacilitiesMapView items={items} you={location.coords} locating={location.locating} onLocate={() => void location.locate()} />
+        ) : (
+          items.map((r) => <FacilityCardFull key={r.facility.id} r={r} canShare={false} />)
+        )}
         {results.isSuccess && items.length > 0 && (
           <p className="text-center text-meta text-muted-foreground" aria-live="polite">
             Showing {items.length} of {total}

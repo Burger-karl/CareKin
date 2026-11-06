@@ -146,6 +146,24 @@ async def register_facility(
         facility,
     )
 
+# 2b. MY FACILITIES
+
+@router.get(
+    "/mine",
+    response_model=list[FacilityRead],
+    status_code=status.HTTP_200_OK,
+    summary="Facilities I registered",
+)
+async def my_facilities(db: DbSession, user: FacilityRegistrar):
+    """Every facility this facility admin registered, whatever its verification status.
+
+    The public search only shows verified facilities; this is how an admin sees one that is
+    still waiting for CareKin to check it. Ops have the verification queue instead.
+    """
+    facilities = await service.facilities_claimed_by(db, user.id)
+    return [await service.facility_to_read(db, f) for f in facilities]
+
+
 # 3. GET FACILITY
 
 @router.get(

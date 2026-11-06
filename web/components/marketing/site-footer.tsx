@@ -16,6 +16,7 @@ const COLUMNS = [
     title: "Get help",
     links: [
       ["Find a facility", "/find-care"],
+      ["List your hospital", "/register?as=facility"],
       ["Sign in", "/login"],
       ["Create an account", "/register"],
     ],

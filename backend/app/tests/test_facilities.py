@@ -101,6 +101,33 @@ async def test_claimed_by_cannot_be_supplied(api, db):
     assert facility.claimed_by == admin_id
 
 
+async def test_admin_lists_only_their_own_facilities_whatever_the_status(api, db):
+    mine, _ = await make_user(db, UserRole.FACILITY_ADMIN)
+    theirs, _ = await make_user(db, UserRole.FACILITY_ADMIN)
+    first = await register(api, mine, name="First Clinic")
+    second = await register(api, mine, name="Second Clinic")
+    await register(api, theirs, name="Someone Else's")
+
+    r = await api.get("/facilities/mine", headers=mine)
+    assert r.status_code == 200, r.text
+    assert [f["id"] for f in r.json()] == [second["id"], first["id"]]
+    assert all(f["verification_status"] == "pending" for f in r.json())
+
+
+async def test_my_facilities_is_empty_before_registering(api, db):
+    headers, _ = await make_user(db, UserRole.FACILITY_ADMIN)
+    r = await api.get("/facilities/mine", headers=headers)
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+async def test_my_facilities_needs_a_facility_role(api, db):
+    assert (await api.get("/facilities/mine")).status_code == 401
+    headers, _ = await make_user(db, UserRole.PATIENT)
+    r = await api.get("/facilities/mine", headers=headers)
+    assert r.status_code == 403
+
+
 # ================================================================ managing
 async def test_owner_and_ops_can_update(api, db):
     owner, _ = await make_user(db, UserRole.FACILITY_ADMIN)

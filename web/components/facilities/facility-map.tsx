@@ -7,33 +7,9 @@ import { ExternalLink, LocateFixed } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useUserLocation } from "@/lib/location";
+import { fetchRoute, type Route } from "@/lib/route";
 import { mapsDirectionsUrl } from "@/lib/utils";
 import type { Facility, GeoPoint } from "@/lib/types";
-
-interface Route {
-  km: number;
-  minutes: number;
-  line: [number, number][];
-}
-
-/** Driving route from OSRM's public server. Fine for light use; swap for a hosted router at scale. */
-async function fetchRoute(from: GeoPoint, to: GeoPoint, signal: AbortSignal): Promise<Route | null> {
-  const url =
-    `https://router.project-osrm.org/route/v1/driving/${from.longitude},${from.latitude};${to.longitude},${to.latitude}` +
-    "?overview=full&geometries=geojson";
-  const res = await fetch(url, { signal });
-  if (!res.ok) return null;
-  const data = (await res.json()) as {
-    routes?: { distance: number; duration: number; geometry: { coordinates: [number, number][] } }[];
-  };
-  const r = data.routes?.[0];
-  if (!r) return null;
-  return {
-    km: r.distance / 1000,
-    minutes: Math.max(1, Math.round(r.duration / 60)),
-    line: r.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
-  };
-}
 
 function pin(color: string, label: string) {
   return `<span style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${color};border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35)"><span style="transform:rotate(45deg);color:#fff;font:700 13px system-ui">${label}</span></span>`;

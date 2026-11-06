@@ -4,6 +4,7 @@ import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Hospital, LocateFixed, MapPin, Search } from "lucide-react";
 import { FacilityCardFull } from "@/components/facilities/facility-card";
+import { FacilitiesMapView, ViewSwitch } from "@/components/facilities/facilities-map-view";
 import { ShareDialog } from "@/components/facilities/share-dialog";
 import { PageHeader } from "@/components/shell/app-shell";
 import { useSession } from "@/components/session/session";
@@ -50,6 +51,7 @@ export function FacilityFinder() {
   const [limit, setLimit] = useState(PAGE);
   const [locOpen, setLocOpen] = useState(false);
   const [share, setShare] = useState<{ id: string; name: string } | null>(null);
+  const [view, setView] = useState<"list" | "map">("map");
 
   const query = q.trim().length >= 2 ? q.trim() : undefined;
   const filter = {
@@ -86,7 +88,13 @@ export function FacilityFinder() {
 
   return (
     <div>
-      <PageHeader title="SCD Facilities" subtitle="Places that can treat a crisis" icon={Hospital} tone="cyan" />
+      <PageHeader
+        title="SCD Facilities"
+        subtitle="Places that can treat a crisis"
+        icon={Hospital}
+        tone="cyan"
+        action={<ViewSwitch view={view} onChange={setView} />}
+      />
 
       <div className="mx-auto max-w-2xl lg:mx-0">
         <div className="flex items-center gap-3 rounded-xl border-[1.5px] border-[#BEDCD8] bg-gradient-to-r from-mint to-white px-4 py-3.5 shadow-sm">
@@ -134,6 +142,9 @@ export function FacilityFinder() {
           />
         </div>
 
+      </div>
+
+      <div className={view === "map" ? "mt-5" : "mx-auto max-w-2xl lg:mx-0"}>
         <div className="mt-5 space-y-4" aria-busy={results.isFetching}>
           {results.isPending && (
             <>
@@ -161,14 +172,25 @@ export function FacilityFinder() {
               )}
             </div>
           )}
-          {items.map((r) => (
-            <FacilityCardFull
-              key={r.facility.id}
-              r={r}
+          {view === "map" && results.isSuccess && items.length > 0 ? (
+            <FacilitiesMapView
+              items={items}
+              you={location.coords}
+              locating={location.locating}
+              onLocate={() => void location.locate()}
               canShare={canShare}
-              onShare={() => setShare({ id: r.facility.id, name: r.facility.name })}
+              onShare={(r) => setShare({ id: r.facility.id, name: r.facility.name })}
             />
-          ))}
+          ) : (
+            items.map((r) => (
+              <FacilityCardFull
+                key={r.facility.id}
+                r={r}
+                canShare={canShare}
+                onShare={() => setShare({ id: r.facility.id, name: r.facility.name })}
+              />
+            ))
+          )}
           {results.isSuccess && items.length > 0 && (
             <p className="text-center text-meta text-muted-foreground" aria-live="polite">
               Showing {items.length} of {total}

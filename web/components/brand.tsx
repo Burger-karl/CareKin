@@ -15,6 +15,7 @@ export function LogoMark({ size = 36, className }: { size?: number; className?: 
       aria-hidden
       width={Math.round(size * MARK_RATIO)}
       height={size}
+      priority
       className={cn("shrink-0", className)}
       style={{ width: Math.round(size * MARK_RATIO), height: size }}
     />
@@ -29,6 +30,7 @@ export function LogoWordmark({ height = 22, className }: { height?: number; clas
       alt="CareKin"
       width={Math.round(height * WORD_RATIO)}
       height={height}
+      priority
       className={cn("shrink-0", className)}
       style={{ width: Math.round(height * WORD_RATIO), height }}
     />
@@ -65,6 +67,7 @@ export function LogoFull({ width = 220, className }: { width?: number; className
       alt="CareKin: Carer and patient together"
       width={width}
       height={width}
+      priority
       className={cn("h-auto", className)}
       style={{ width, height: "auto" }}
     />
