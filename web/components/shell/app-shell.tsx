@@ -124,7 +124,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { me, patient } = useSession();
   const canSeePassport = me.role !== "family_abroad" || patient?.genotype != null;
   const sections = useMemo(() => sectionsFor(me.role, canSeePassport), [me.role, canSeePassport]);
-  const showCrisis = me.role === "patient" || me.role === "guardian";
+  // Family members who follow from abroad sign up as guardians, but only the patient or a guardian can start a crisis.
+  const showCrisis = (me.role === "patient" || me.role === "guardian") && !!patient && patient.access !== "family";
   const bookings = useBookings();
   const notices = useMemo(
     () => bookingNotices(bookings.data ?? [], patient?.id, me.role === "guardian"),

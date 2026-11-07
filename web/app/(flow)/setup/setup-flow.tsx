@@ -7,6 +7,7 @@ import { Check, Copy, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { PageSpinner } from "@/components/session/session";
 import { Button } from "@/components/ui/button";
+import { DatePicker, toYmd } from "@/components/ui/date-picker";
 import { Input, Select } from "@/components/ui/input";
 import { Field } from "@/components/ui/label";
 import { ApiError, api, errorMessage } from "@/lib/api/client";
@@ -231,13 +232,12 @@ export function SetupFlow() {
           <Input id="full_name" value={form.full_name} onChange={set("full_name")} aria-invalid={!!errors.full_name} />
         </Field>
         <Field label="Date of birth" htmlFor="dob" error={errors.date_of_birth}>
-          <Input
+          <DatePicker
             id="dob"
-            type="date"
-            max={new Date().toISOString().slice(0, 10)}
+            max={toYmd(new Date())}
             value={form.date_of_birth}
-            onChange={set("date_of_birth")}
-            aria-invalid={!!errors.date_of_birth}
+            onChange={(v) => setForm((f) => ({ ...f, date_of_birth: v }))}
+            invalid={!!errors.date_of_birth}
           />
         </Field>
         {isChild && (

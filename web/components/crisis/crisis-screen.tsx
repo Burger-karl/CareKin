@@ -255,13 +255,20 @@ export function CrisisScreen() {
     onError: (e) => toast.error(errorMessage(e)),
   });
 
+  // Family members follow a crisis from their dashboard; they can't start one. A crisis already
+  // open on this device stays on screen.
+  const followOnly = patient?.access === "family";
+  useEffect(() => {
+    if (ready && followOnly && !pending && !eventId) router.replace("/dashboard");
+  }, [ready, followOnly, pending, eventId, router]);
+
   // The crisis ended elsewhere (resolved by a guardian, or cancelled): leave crisis mode.
   useEffect(() => {
     if (data && data.status !== "active") clearActive();
   }, [data]);
 
   if (!patient || !ready) return null;
-  if (!pending && !eventId) return <Launcher patientId={patient.id} />;
+  if (!pending && !eventId) return followOnly ? null : <Launcher patientId={patient.id} />;
 
   const closed = data && data.status !== "active";
   const failed = data?.alerts.filter((a) => a.status === "failed").length ?? 0;
