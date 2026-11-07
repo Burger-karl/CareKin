@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { LocateFixed } from "lucide-react";
 import { toast } from "sonner";
+import { LocationField } from "@/components/location/location-field";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,6 @@ export function WorkAreaCard({ caregiver }: { caregiver: CaregiverSelf }) {
 
   const [point, setPoint] = useState<GeoPoint | null>(saved);
   const [radius, setRadius] = useState(String(caregiver.service_radius_km ?? 10));
-  const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,23 +39,6 @@ export function WorkAreaCard({ caregiver }: { caregiver: CaregiverSelf }) {
     },
     onError: (e) => setError(errorMessage(e)),
   });
-
-  function locate() {
-    setError(null);
-    if (!navigator.geolocation) return setError("This browser can't share your location.");
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (p) => {
-        setPoint({ latitude: p.coords.latitude, longitude: p.coords.longitude });
-        setLocating(false);
-      },
-      () => {
-        setError("We couldn't get your location. Allow location for this site and try again.");
-        setLocating(false);
-      },
-      { timeout: 8000 },
-    );
-  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -76,31 +58,26 @@ export function WorkAreaCard({ caregiver }: { caregiver: CaregiverSelf }) {
     <Card>
       <CardTitle>Where you work</CardTitle>
       <p className="ck-meta mt-1">
-        Families only see you when their home is inside your service area. Stand where you work from, then use your current
-        location.
+        Families only see you when their home is inside your service area. Use your current location, or search for the
+        area you work from.
       </p>
       <form onSubmit={submit} className="mt-4 space-y-4" noValidate>
-        <div>
-          <Button type="button" variant={point ? "secondary" : "default"} className="w-full" loading={locating} onClick={locate}>
-            <LocateFixed /> {point ? "Update to my current location" : "Use my current location"}
-          </Button>
-          {point ? (
-            <p className="ck-meta mt-2">
-              Saved spot: {point.latitude.toFixed(4)}, {point.longitude.toFixed(4)} ·{" "}
-              <a
-                className="font-semibold text-teal underline"
-                href={`https://www.openstreetmap.org/?mlat=${point.latitude}&mlon=${point.longitude}#map=14/${point.latitude}/${point.longitude}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                See on map
-              </a>
-            </p>
-          ) : (
-            <p className="mt-2 rounded-lg bg-amber-soft px-3 py-2 text-[14px] text-amber-ink">
+        <div className="space-y-2">
+          {!point && (
+            <p className="rounded-lg bg-amber-soft px-3 py-2 text-[14px] text-amber-ink">
               No location yet, so no family can find you.
             </p>
           )}
+          <LocationField
+            label="Your base"
+            value={point}
+            onChange={(p) => {
+              setError(null);
+              setPoint(p);
+            }}
+            searchTitle="Where do you work from?"
+            searchDescription="Search for the street or area you work from, then pick the closest match."
+          />
         </div>
 
         <Field label="How far will you travel? (km)" htmlFor="radius" error={error} hint="A bigger number reaches more families.">

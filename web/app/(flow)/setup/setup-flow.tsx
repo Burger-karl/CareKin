@@ -3,8 +3,9 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, MapPin } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
+import { LocationField } from "@/components/location/location-field";
 import { PageSpinner } from "@/components/session/session";
 import { Button } from "@/components/ui/button";
 import { DatePicker, toYmd } from "@/components/ui/date-picker";
@@ -92,7 +93,6 @@ export function SetupFlow() {
     contact_relationship: "",
   });
   const [home, setHome] = useState<GeoPoint | null>(null);
-  const [locating, setLocating] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
 
@@ -114,22 +114,6 @@ export function SetupFlow() {
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  function locate() {
-    if (!navigator.geolocation) return toast.error("This browser can't share your location.");
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (p) => {
-        setHome({ latitude: p.coords.latitude, longitude: p.coords.longitude });
-        setLocating(false);
-      },
-      () => {
-        toast.error("We couldn't get your location. You can add it later.");
-        setLocating(false);
-      },
-      { timeout: 8000, maximumAge: 60_000 },
-    );
-  }
 
   function validate() {
     const e: Errors = {};
@@ -268,13 +252,14 @@ export function SetupFlow() {
         <Field label="Current medications" htmlFor="meds" hint="Names only, e.g. Hydroxyurea 500mg, Folic Acid 5mg">
           <Input id="meds" value={form.medications} onChange={set("medications")} />
         </Field>
-        <div className="space-y-1.5">
-          <p className="ck-label">Home location</p>
-          <Button type="button" variant="secondary" size="sm" onClick={locate} loading={locating}>
-            {home ? <Check /> : <MapPin />} {home ? "Location saved" : "Use my current location"}
-          </Button>
-          <p className="ck-meta">Used to find the nearest facility if GPS isn&apos;t available during a crisis.</p>
-        </div>
+        <LocationField
+          label="Home location"
+          value={home}
+          onChange={setHome}
+          hint="Used to find the nearest facility if GPS isn't available during a crisis. You can add it later."
+          searchTitle={isChild ? "Where does your child live?" : "Where do you live?"}
+          searchDescription="Search for the street or area, then pick the closest match."
+        />
       </section>
 
       <section className="space-y-4">

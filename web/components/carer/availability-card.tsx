@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
-import { TimeSelect } from "@/components/ui/date-picker";
+import { TimePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { api, errorMessage } from "@/lib/api/client";
@@ -91,14 +91,14 @@ export function AvailabilityCard({ caregiverId }: { caregiverId: string }) {
                 <span className="w-24 text-[16px] font-semibold">{DAYS[i]}</span>
                 {d.on ? (
                   <span className="flex flex-wrap items-center gap-2">
-                    <TimeSelect
+                    <TimePicker
                       aria-label={`${DAYS[i]} start`}
                       className="w-[8.75rem]"
                       value={d.start}
                       onChange={(start) => set(i, { start })}
                     />
                     <span className="text-muted-foreground">to</span>
-                    <TimeSelect
+                    <TimePicker
                       aria-label={`${DAYS[i]} end`}
                       className="w-[8.75rem]"
                       value={d.end}

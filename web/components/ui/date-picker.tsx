@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { CalendarDays, ChevronLeft, ChevronRight, Clock } from "lucide-react";
-import { Select, fieldClass } from "@/components/ui/input";
+import { fieldClass } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 /*
@@ -63,6 +63,9 @@ export function formatClock(t: string) {
 
 const headerSelect =
   "h-9 cursor-pointer appearance-none rounded-md bg-mint-soft bg-[url('/chevron.svg')] bg-[length:14px] bg-[position:right_0.5rem_center] bg-no-repeat pl-3 pr-7 text-[15px] font-semibold text-foreground hover:bg-mint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
+
+const popoverClass =
+  "z-[60] rounded-xl border-[1.5px] border-line bg-white p-3 shadow-xl shadow-ink/10 outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95";
 
 function NavButton({ label, ...props }: { label: string } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
@@ -303,7 +306,7 @@ export function DatePicker({
           collisionPadding={16}
           // The calendar focuses the chosen day itself.
           onOpenAutoFocus={(e) => e.preventDefault()}
-          className="z-[60] rounded-xl border-[1.5px] border-line bg-white p-3 shadow-xl shadow-ink/10 outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
+          className={popoverClass}
         >
           <Calendar
             value={has ? value : null}
@@ -322,60 +325,197 @@ export function DatePicker({
   );
 }
 
-/** A time field in steps (30 minutes by default). Takes and returns "HH:mm". */
-export function TimeSelect({
+const HOURS_12 = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+const to24 = (h12: number, pm: boolean) => (h12 % 12) + (pm ? 12 : 0);
+const hhmm = (h: number, m: number) => `${pad(h)}:${pad(m)}`;
+const groupLabel = "mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground";
+
+function chip(on: boolean) {
+  return cn(
+    "flex h-10 items-center justify-center rounded-lg text-[15px] font-medium tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:bg-transparent disabled:text-muted-foreground/35",
+    on ? "bg-primary font-semibold text-white" : "bg-ground text-foreground hover:bg-mint-soft",
+  );
+}
+
+/** AM or PM, then the hour, then the minutes. Picking the minutes closes it. */
+function TimeGrid({
+  value,
+  step,
+  isDisabled,
+  onChange,
+  onDone,
+}: {
+  value: string | null;
+  step: number;
+  isDisabled?: (time: string) => boolean;
+  onChange: (time: string) => void;
+  onDone: () => void;
+}) {
+  const cur = value ? { h: Number(value.slice(0, 2)), m: Number(value.slice(3, 5)) } : null;
+  const curMinute = cur?.m;
+  const minutes = useMemo(() => {
+    const list = Array.from({ length: Math.ceil(60 / step) }, (_, i) => i * step);
+    // A saved time between the steps (e.g. 08:10) still shows as itself.
+    if (curMinute !== undefined && !list.includes(curMinute)) {
+      list.push(curMinute);
+      list.sort((a, b) => a - b);
+    }
+    return list;
+  }, [step, curMinute]);
+  const off = (h: number, m: number) => !!isDisabled?.(hhmm(h, m));
+  const hourOff = (h: number) => minutes.every((m) => off(h, m));
+  const halfOff = (pm: boolean) => HOURS_12.every((h) => hourOff(to24(h, pm)));
+  const [pm, setPm] = useState(() => (cur ? cur.h >= 12 : halfOff(false) && !halfOff(true)));
+  const root = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Start on the chosen hour, or the first one that can be picked.
+    const hours = root.current?.querySelector("[data-hours]");
+    (hours?.querySelector<HTMLButtonElement>('[aria-pressed="true"]') ?? hours?.querySelector<HTMLButtonElement>("button:not(:disabled)"))?.focus();
+  }, []);
+
+  /** Moves to an hour, keeping the minutes when that time can be picked. */
+  function pickHour(h: number) {
+    const m = cur && !off(h, cur.m) ? cur.m : minutes.find((x) => !off(h, x));
+    if (m !== undefined) onChange(hhmm(h, m));
+  }
+
+  function pickHalf(nextPm: boolean) {
+    setPm(nextPm);
+    if (!cur) return;
+    const same = to24(cur.h, nextPm);
+    const h = !hourOff(same) ? same : HOURS_12.map((x) => to24(x, nextPm)).find((x) => !hourOff(x));
+    if (h !== undefined) pickHour(h);
+  }
+
+  return (
+    <div ref={root} className="w-[17.5rem] select-none space-y-3">
+      <div role="group" aria-label="Morning or afternoon" className="grid grid-cols-2 gap-1 rounded-full bg-ground p-1">
+        {[false, true].map((half) => (
+          <button
+            key={String(half)}
+            type="button"
+            aria-pressed={pm === half}
+            disabled={halfOff(half)}
+            onClick={() => pickHalf(half)}
+            className={cn(
+              "h-9 rounded-full text-[15px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40",
+              pm === half ? "bg-white text-teal shadow-sm" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {half ? "PM" : "AM"}
+          </button>
+        ))}
+      </div>
+      <div>
+        <p className={groupLabel}>Hour</p>
+        <div data-hours className="grid grid-cols-4 gap-1.5">
+          {HOURS_12.map((h12) => {
+            const h = to24(h12, pm);
+            return (
+              <button
+                key={h12}
+                type="button"
+                aria-pressed={cur?.h === h}
+                aria-label={`${h12} ${pm ? "PM" : "AM"}`}
+                disabled={hourOff(h)}
+                onClick={() => pickHour(h)}
+                className={chip(cur?.h === h)}
+              >
+                {h12}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div>
+        <p className={groupLabel}>Minutes</p>
+        <div className="grid grid-cols-4 gap-1.5">
+          {minutes.map((m) => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={cur?.m === m}
+              aria-label={cur ? formatClock(hhmm(cur.h, m)) : `${m} minutes`}
+              // Choose the hour first.
+              disabled={!cur || off(cur.h, m)}
+              onClick={() => {
+                onChange(hhmm(cur!.h, m));
+                onDone();
+              }}
+              className={chip(cur?.m === m)}
+            >
+              :{pad(m)}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A time field that opens the hour and minute picker. Takes and returns 24-hour "HH:mm". */
+export function TimePicker({
   id,
   value,
   onChange,
-  step = 30,
+  step = 15,
   isDisabled,
   invalid,
+  placeholder = "Time",
   className,
   "aria-label": ariaLabel,
 }: {
   id?: string;
   value: string;
   onChange: (time: string) => void;
+  /** Minutes between choices. */
   step?: number;
   /** Greys out times that can't be chosen, such as times already past today. */
   isDisabled?: (time: string) => boolean;
   invalid?: boolean;
+  placeholder?: string;
   className?: string;
   "aria-label"?: string;
 }) {
-  const options = useMemo(() => {
-    const list: string[] = [];
-    for (let m = 0; m < 1440; m += step) list.push(`${pad(Math.floor(m / 60))}:${pad(m % 60)}`);
-    // A saved time between the steps (e.g. 08:15) still shows as itself.
-    if (value && !list.includes(value)) {
-      list.push(value);
-      list.sort();
-    }
-    return list;
-  }, [step, value]);
+  const [open, setOpen] = useState(false);
+  const has = /^\d{2}:\d{2}$/.test(value);
   return (
-    <div className={cn("relative", className)}>
-      <Clock className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" aria-hidden />
-      <Select
-        id={id}
-        value={value}
-        aria-label={ariaLabel}
-        aria-invalid={invalid || undefined}
-        onChange={(e) => onChange(e.target.value)}
-        className="cursor-pointer pl-11 pr-8 tabular-nums"
-      >
-        {!value && <option value="">Time</option>}
-        {options.map((t) => (
-          <option key={t} value={t} disabled={isDisabled?.(t)}>
-            {formatClock(t)}
-          </option>
-        ))}
-      </Select>
-    </div>
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
+        <button
+          id={id}
+          type="button"
+          data-invalid={invalid || undefined}
+          // Keep the chosen time in the name, which aria-label would otherwise replace.
+          aria-label={ariaLabel && `${ariaLabel}: ${has ? formatClock(value) : "not set"}`}
+          className={cn(
+            fieldClass,
+            "flex h-12 items-center gap-2.5 px-3.5 text-left data-[invalid]:border-crisis data-[state=open]:border-primary",
+            !has && "text-muted-foreground/80",
+            className,
+          )}
+        >
+          <Clock className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="min-w-0 flex-1 truncate tabular-nums">{has ? formatClock(value) : placeholder}</span>
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          align="start"
+          sideOffset={6}
+          collisionPadding={16}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          className={popoverClass}
+        >
+          <TimeGrid value={has ? value : null} step={step} isDisabled={isDisabled} onChange={onChange} onDone={() => setOpen(false)} />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 
-/** The next step at or after a time, e.g. 14:10 becomes 14:30. Late at night it stays put. */
+/** The next step at or after a time, e.g. 14:10 becomes 14:15. Late at night it stays put. */
 function roundUp(t: string, step: number) {
   const [h, m] = t.split(":").map(Number);
   const next = Math.ceil(((h ?? 0) * 60 + (m ?? 0)) / step) * step;
@@ -389,7 +529,7 @@ export function DateTimePicker({
   onChange,
   min,
   range,
-  step = 30,
+  step = 15,
   timeLabel = "Time",
   className,
 }: {
@@ -417,7 +557,7 @@ export function DateTimePicker({
           range={range}
           onChange={(d) => onChange(`${d}T${tooEarly(d, time) ? roundUp(minTime!, step) : time}`)}
         />
-        <TimeSelect
+        <TimePicker
           aria-label={timeLabel}
           value={time}
           step={step}

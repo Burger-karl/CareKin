@@ -3,8 +3,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Check, LocateFixed } from "lucide-react";
 import { toast } from "sonner";
+import { LocationField } from "@/components/location/location-field";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Field } from "@/components/ui/label";
@@ -40,25 +40,9 @@ export function ApplyForm() {
   const [guarantors, setGuarantors] = useState<Guarantor[]>([blank(), blank()]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const [locating, setLocating] = useState(false);
 
   const setG = (i: number, k: keyof Guarantor, v: string) =>
     setGuarantors((g) => g.map((x, n) => (n === i ? { ...x, [k]: v } : x)));
-
-  function locate() {
-    setLocating(true);
-    navigator.geolocation?.getCurrentPosition(
-      (p) => {
-        setBase({ latitude: p.coords.latitude, longitude: p.coords.longitude });
-        setLocating(false);
-      },
-      () => {
-        toast.error("We couldn't get your location. Families find you by distance, so please try again.");
-        setLocating(false);
-      },
-      { timeout: 8000 },
-    );
-  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -157,13 +141,15 @@ export function ApplyForm() {
             </Select>
           </Field>
         </div>
-        <div className="space-y-1.5">
-          <p className="ck-label">Where you&apos;re based</p>
-          <Button type="button" variant="secondary" size="sm" onClick={locate} loading={locating}>
-            {base ? <Check /> : <LocateFixed />} {base ? "Location saved" : "Use my current location"}
-          </Button>
-          {errors.base && <p role="alert" className="text-meta font-medium text-crisis-ink">{errors.base}</p>}
-        </div>
+        <LocationField
+          label="Where you're based"
+          value={base}
+          onChange={setBase}
+          error={errors.base}
+          hint="Families find you by distance from here."
+          searchTitle="Where do you work from?"
+          searchDescription="Search for the street or area you work from, then pick the closest match."
+        />
       </section>
 
       {guarantors.map((g, i) => (
