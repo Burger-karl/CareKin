@@ -7,6 +7,7 @@ import { MapPin, ShieldCheck, SlidersHorizontal, UserRound } from "lucide-react"
 import { toast } from "sonner";
 import { CrisisDevicesCard } from "@/components/crisis/device-setup";
 import { PlaceDialog } from "@/components/location/place-dialog";
+import { CareKinId } from "@/components/settings/carekin-id";
 import { ContactsCard } from "@/components/settings/contacts-card";
 import { PageHeader } from "@/components/shell/app-shell";
 import { useSession } from "@/components/session/session";
@@ -104,6 +105,11 @@ export function SettingsView() {
               Save changes
             </Button>
           </form>
+          <CareKinId
+            id={me.id}
+            hint="Share it with someone who wants to give you app access to their care."
+            className="mt-6 border-t border-line pt-5"
+          />
         </Card>
 
         {patient && patient.access !== "family" && (

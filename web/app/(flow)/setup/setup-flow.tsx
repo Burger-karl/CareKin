@@ -3,10 +3,12 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, MapPin } from "lucide-react";
 import { toast } from "sonner";
+import { LocationField } from "@/components/location/location-field";
 import { PageSpinner } from "@/components/session/session";
+import { CareKinId } from "@/components/settings/carekin-id";
 import { Button } from "@/components/ui/button";
+import { DatePicker, toYmd } from "@/components/ui/date-picker";
 import { Input, Select } from "@/components/ui/input";
 import { Field } from "@/components/ui/label";
 import { ApiError, api, errorMessage } from "@/lib/api/client";
@@ -22,7 +24,6 @@ type Errors = Record<string, string>;
 
 function FamilyCard({ userId }: { userId: string }) {
   const router = useRouter();
-  const [copied, setCopied] = useState(false);
   return (
     <div className="space-y-6">
       <div>
@@ -32,24 +33,7 @@ function FamilyCard({ userId }: { userId: string }) {
           enter this ID to give you app access. You&apos;ll see only what they choose to share.
         </p>
       </div>
-      <div className="ck-card space-y-3 p-5">
-        <p className="ck-label">Your CareKin ID</p>
-        <code className="block break-all rounded-lg bg-mint-soft px-3 py-3 text-[15px]">{userId}</code>
-        <Button
-          variant="secondary"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(userId);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
-            } catch {
-              toast.error("Copy failed. Select the ID and copy it.");
-            }
-          }}
-        >
-          {copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy ID"}
-        </Button>
-      </div>
+      <CareKinId id={userId} className="ck-card p-5" />
       <Button
         size="lg"
         className="w-full"
@@ -91,7 +75,6 @@ export function SetupFlow() {
     contact_relationship: "",
   });
   const [home, setHome] = useState<GeoPoint | null>(null);
-  const [locating, setLocating] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
 
@@ -113,22 +96,6 @@ export function SetupFlow() {
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  function locate() {
-    if (!navigator.geolocation) return toast.error("This browser can't share your location.");
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (p) => {
-        setHome({ latitude: p.coords.latitude, longitude: p.coords.longitude });
-        setLocating(false);
-      },
-      () => {
-        toast.error("We couldn't get your location. You can add it later.");
-        setLocating(false);
-      },
-      { timeout: 8000, maximumAge: 60_000 },
-    );
-  }
 
   function validate() {
     const e: Errors = {};
@@ -231,13 +198,12 @@ export function SetupFlow() {
           <Input id="full_name" value={form.full_name} onChange={set("full_name")} aria-invalid={!!errors.full_name} />
         </Field>
         <Field label="Date of birth" htmlFor="dob" error={errors.date_of_birth}>
-          <Input
+          <DatePicker
             id="dob"
-            type="date"
-            max={new Date().toISOString().slice(0, 10)}
+            max={toYmd(new Date())}
             value={form.date_of_birth}
-            onChange={set("date_of_birth")}
-            aria-invalid={!!errors.date_of_birth}
+            onChange={(v) => setForm((f) => ({ ...f, date_of_birth: v }))}
+            invalid={!!errors.date_of_birth}
           />
         </Field>
         {isChild && (
@@ -268,18 +234,19 @@ export function SetupFlow() {
         <Field label="Current medications" htmlFor="meds" hint="Names only, e.g. Hydroxyurea 500mg, Folic Acid 5mg">
           <Input id="meds" value={form.medications} onChange={set("medications")} />
         </Field>
-        <div className="space-y-1.5">
-          <p className="ck-label">Home location</p>
-          <Button type="button" variant="secondary" size="sm" onClick={locate} loading={locating}>
-            {home ? <Check /> : <MapPin />} {home ? "Location saved" : "Use my current location"}
-          </Button>
-          <p className="ck-meta">Used to find the nearest facility if GPS isn&apos;t available during a crisis.</p>
-        </div>
+        <LocationField
+          label="Home location"
+          value={home}
+          onChange={setHome}
+          hint="Used to find the nearest facility if GPS isn't available during a crisis. You can add it later."
+          searchTitle={isChild ? "Where does your child live?" : "Where do you live?"}
+          searchDescription="Search for the street or area, then pick the closest match."
+        />
       </section>
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-card font-bold">First emergency contact</h2>
+          <h2 className="text-[17px] font-bold leading-6">First emergency contact</h2>
           <p className="ck-meta">Alerted by SMS when the crisis button is pressed. Optional now, important soon.</p>
         </div>
         <Field label="Name" htmlFor="contact_name" error={errors.contact_name}>

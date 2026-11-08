@@ -20,11 +20,11 @@ Textarea.displayName = "Textarea";
 
 const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(
   ({ className, children, ...props }, ref) => (
-    <select ref={ref} className={cn(field, "h-12 appearance-none bg-[url('/chevron.svg')] bg-[length:16px] bg-[right_1rem_center] bg-no-repeat pr-10", className)} {...props}>
+    <select ref={ref} className={cn(field, "h-12 appearance-none bg-[url('/chevron.svg')] bg-[length:16px] bg-[position:right_1rem_center] bg-no-repeat pr-10", className)} {...props}>
       {children}
     </select>
   ),
 );
 Select.displayName = "Select";
 
-export { Input, Textarea, Select };
+export { Input, Textarea, Select, field as fieldClass };

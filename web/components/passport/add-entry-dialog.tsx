@@ -5,13 +5,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DatePicker, toYmd } from "@/components/ui/date-picker";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Field } from "@/components/ui/label";
 import { ApiError, api, errorMessage } from "@/lib/api/client";
 import { ENTRY_LABEL } from "@/lib/passport";
 import type { PassportEntryType } from "@/lib/types";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => toYmd(new Date());
 
 /** Log a crisis, visit, transfusion, medication change or trigger. Encrypted on the server. */
 export function AddEntryDialog({
@@ -81,7 +82,7 @@ export function AddEntryDialog({
             </Select>
           </Field>
           <Field label="Date" htmlFor="entry-date" error={errors.occurred_at}>
-            <Input id="entry-date" type="date" max={today()} value={date} onChange={(e) => setDate(e.target.value)} />
+            <DatePicker id="entry-date" max={today()} value={date} onChange={setDate} invalid={!!errors.occurred_at} />
           </Field>
           <Field label="Summary" htmlFor="entry-summary" error={errors.summary} hint="e.g. Transfusion, 2 units">
             <Input id="entry-summary" maxLength={500} value={summary} onChange={(e) => setSummary(e.target.value)} />

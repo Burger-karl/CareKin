@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
-import { Copy } from "lucide-react";
-import { toast } from "sonner";
 import { useSession } from "@/components/session/session";
+import { CareKinId } from "@/components/settings/carekin-id";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
@@ -41,16 +40,7 @@ function NoLink({ id }: { id: string }) {
         Send your CareKin ID to the person you support. They add you as an emergency contact in their Settings and enter
         this ID to give you app access. You&apos;ll see only what they choose to share.
       </p>
-      <div className="ck-card space-y-3 p-5">
-        <p className="ck-label">Your CareKin ID</p>
-        <code className="block break-all rounded-lg bg-mint-soft px-3 py-3 text-[15px]">{id}</code>
-        <Button
-          variant="secondary"
-          onClick={() => navigator.clipboard.writeText(id).then(() => toast.success("Copied."), () => toast.error("Copy failed."))}
-        >
-          <Copy /> Copy ID
-        </Button>
-      </div>
+      <CareKinId id={id} className="ck-card p-5" />
     </div>
   );
 }

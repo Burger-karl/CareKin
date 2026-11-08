@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { TimePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { api, errorMessage } from "@/lib/api/client";
@@ -90,21 +90,21 @@ export function AvailabilityCard({ caregiverId }: { caregiverId: string }) {
                 <Switch checked={d.on} onCheckedChange={(on) => set(i, { on })} aria-label={`Work on ${DAYS[i]}`} />
                 <span className="w-24 text-[16px] font-semibold">{DAYS[i]}</span>
                 {d.on ? (
-                  <span className="flex items-center gap-2">
-                    <Input
-                      type="time"
+                  <span className="flex flex-wrap items-center gap-2">
+                    <TimePicker
                       aria-label={`${DAYS[i]} start`}
-                      className="h-11 w-32"
+                      className="w-[8.75rem]"
                       value={d.start}
-                      onChange={(e) => set(i, { start: e.target.value })}
+                      onChange={(start) => set(i, { start })}
                     />
                     <span className="text-muted-foreground">to</span>
-                    <Input
-                      type="time"
+                    <TimePicker
                       aria-label={`${DAYS[i]} end`}
-                      className="h-11 w-32"
+                      className="w-[8.75rem]"
                       value={d.end}
-                      onChange={(e) => set(i, { end: e.target.value })}
+                      isDisabled={(t) => t <= d.start}
+                      invalid={!!d.start && !!d.end && d.start >= d.end}
+                      onChange={(end) => set(i, { end })}
                     />
                   </span>
                 ) : (
