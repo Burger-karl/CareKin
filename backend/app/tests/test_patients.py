@@ -140,7 +140,7 @@ async def login(api, latest_code, phone, role="patient", consent=True):
 
 
 async def family_user(db):
-    """family_abroad can't self-register, so create one directly."""
+    """A family_abroad account, created directly to skip the sign-up flow."""
     user = User(phone="+2348039999999", full_name="Uche Abroad", role=UserRole.FAMILY_ABROAD)
     db.add(user)
     await db.commit()

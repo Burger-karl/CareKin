@@ -17,7 +17,7 @@ export interface WhoOption {
 export const WHO_OPTIONS: WhoOption[] = [
   { id: "myself", title: "Myself", sub: "I live with SCD", role: "patient" },
   { id: "child", title: "My child", sub: "I'm a guardian of a minor", role: "guardian" },
-  { id: "family", title: "Family abroad", sub: "I fund and follow care", role: "guardian" },
+  { id: "family", title: "Family abroad", sub: "I fund and follow care", role: "family_abroad" },
   { id: "caregiver", title: "Caregiver", sub: "Apply to give care", role: "caregiver" },
   { id: "facility", title: "Hospital or clinic", sub: "List your facility so patients can find it in a crisis", role: "facility_admin" },
 ];
@@ -86,8 +86,8 @@ export function ConsentStep({
     llm_processing: false,
   });
 
-  // Only setting up care for a patient needs the health-data consent.
-  const needsHealth = who.role === "patient" || who.role === "guardian";
+  // Anyone who will hold or see a patient's health records needs the health-data consent (matches the API's REQUIRED_CONSENTS).
+  const needsHealth = who.role === "patient" || who.role === "guardian" || who.role === "family_abroad";
   const healthOk = !needsHealth || checked.health_data;
 
   return (

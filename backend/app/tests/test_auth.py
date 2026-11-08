@@ -99,7 +99,18 @@ async def test_register_again_before_verifying_replaces_details(api, db, sms):
     assert await db.scalar(select(func.count()).select_from(User)) == 1
 
 
-@pytest.mark.parametrize("role", ["ops", "family_abroad", "admin"])
+async def test_family_abroad_registers_themselves(api, latest_code):
+    """Family who fund and follow care sign up as family_abroad, often on a foreign number."""
+    tokens = await signup(api, latest_code, phone="+44 7700 900123", role="family_abroad", name="Ada in London")
+    assert tokens["user"]["role"] == "family_abroad"
+    assert tokens["user"]["phone"] == "+447700900123"
+
+    me = (await api.get("/auth/me", headers=bearer(tokens["access_token"]))).json()
+    assert me["role"] == "family_abroad"
+    assert me["consents"]["missing_required"] == ["terms", "health_data"]
+
+
+@pytest.mark.parametrize("role", ["ops", "admin"])
 async def test_register_rejects_non_self_service_roles(api, role):
     r = await api.post("/auth/register", json={"phone": PHONE, "full_name": "Ada Obi", "role": role})
     assert r.status_code == 422

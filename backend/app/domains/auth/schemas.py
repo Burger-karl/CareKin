@@ -58,7 +58,10 @@ class RegisterRequest(StrictModel):
     phone: PhoneNumber
     full_name: Annotated[str, Field(max_length=120), AfterValidator(_clean_name)]
     role: UserRole = Field(
-        description="patient, guardian, caregiver or facility_admin. ops accounts are created by an admin."
+        description=(
+            "patient, guardian, family_abroad, caregiver or facility_admin. "
+            "ops accounts are created by an admin."
+        )
     )
     email: Annotated[str | None, Field(max_length=254), AfterValidator(_clean_email)] = None
     preferred_language: PreferredLanguage = PreferredLanguage.ENGLISH
