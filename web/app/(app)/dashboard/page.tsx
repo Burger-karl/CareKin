@@ -15,6 +15,7 @@ export default function DashboardPage() {
   }, [me.role, router]);
 
   if (me.role === "facility_admin") return null;
-  if (me.role === "family_abroad" || patient?.access === "family") return <FamilyHome />;
+  // No patient yet means a family member waiting to be linked: show them their CareKin ID.
+  if (!patient || me.role === "family_abroad" || patient.access === "family") return <FamilyHome />;
   return <PatientHome />;
 }

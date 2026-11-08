@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { LogoMark } from "@/components/brand";
 import { authApi } from "@/lib/api/client";
 import { useMe, usePatients } from "@/lib/api/queries";
 import { SKIP_SETUP_KEY } from "@/lib/storage";
@@ -49,6 +50,20 @@ export function PageSpinner() {
   );
 }
 
+/** Shown from the moment someone presses Sign out until the sign-in page takes over. */
+function SigningOut() {
+  return (
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-5 bg-background p-6 text-center" role="status" aria-live="polite">
+      <LogoMark size={48} />
+      <div className="size-7 animate-spin rounded-full border-[3px] border-mint border-t-primary" aria-hidden />
+      <div>
+        <p className="text-[17px] font-bold leading-6">Signing you out…</p>
+        <p className="ck-meta mt-1">You&apos;ll be back at the sign-in page in a moment.</p>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Loads the signed-in user (and their patients) and keeps people in the area that suits
  * their role. The API still enforces access; this only decides what to show.
@@ -61,6 +76,7 @@ export function SessionGate({ roles, children }: { roles: UserRole[]; children: 
   const patients = usePatients({ enabled: wantsPatients });
   const [selected, setSelected] = useState<string | null>(null);
   const [skipSetup, setSkipSetup] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     try {
@@ -95,9 +111,12 @@ export function SessionGate({ roles, children }: { roles: UserRole[]; children: 
   }, []);
 
   const signOut = useCallback(async () => {
-    await authApi("logout").catch(() => null);
+    setSigningOut(true);
+    router.prefetch("/login");
+    // Keep the screen up long enough to read, so it doesn't just flash.
+    await Promise.all([authApi("logout").catch(() => null), new Promise((r) => setTimeout(r, 600))]);
     qc.clear();
-    router.replace("/login");
+    router.replace("/login?signed_out=1");
   }, [qc, router]);
 
   const value = useMemo<SessionValue | null>(
@@ -105,10 +124,13 @@ export function SessionGate({ roles, children }: { roles: UserRole[]; children: 
     [me.data, list, patient, setPatientId, signOut],
   );
 
+  // Before anything else: clearing the account mid sign-out must not flash an error or a blank page.
+  if (signingOut) return <SigningOut />;
+
   if (me.isError) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3 p-6 text-center">
-        <p className="text-card font-bold">We couldn&apos;t load your account.</p>
+        <p className="text-[17px] font-bold leading-6">We couldn&apos;t load your account.</p>
         <p className="ck-meta max-w-xs">{me.error.message}</p>
         <button className="font-semibold text-teal underline" onClick={() => me.refetch()}>
           Try again

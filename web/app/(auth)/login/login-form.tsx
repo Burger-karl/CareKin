@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { CircleCheck } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { OtpForm } from "@/components/auth/otp-form";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ export function LoginForm() {
   const [sent, setSent] = useState<Sent | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const signedOut = params.get("signed_out") === "1" && !sent;
 
   async function sendCode(e: React.FormEvent) {
     e.preventDefault();
@@ -58,6 +60,11 @@ export function LoginForm() {
 
   return (
     <div className="space-y-6">
+      {signedOut && (
+        <p role="status" className="flex items-center gap-2.5 rounded-lg bg-mint px-4 py-3 text-[15px] font-semibold text-teal">
+          <CircleCheck className="size-5 shrink-0" aria-hidden /> You&apos;re signed out. See you soon.
+        </p>
+      )}
       <div>
         <h1 className="text-title font-bold">Welcome back</h1>
         <p className="mt-1 text-muted-foreground">Sign in with your phone number. We&apos;ll text you a code.</p>

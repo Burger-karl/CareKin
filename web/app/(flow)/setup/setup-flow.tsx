@@ -3,10 +3,10 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { LocationField } from "@/components/location/location-field";
 import { PageSpinner } from "@/components/session/session";
+import { CareKinId } from "@/components/settings/carekin-id";
 import { Button } from "@/components/ui/button";
 import { DatePicker, toYmd } from "@/components/ui/date-picker";
 import { Input, Select } from "@/components/ui/input";
@@ -24,7 +24,6 @@ type Errors = Record<string, string>;
 
 function FamilyCard({ userId }: { userId: string }) {
   const router = useRouter();
-  const [copied, setCopied] = useState(false);
   return (
     <div className="space-y-6">
       <div>
@@ -34,24 +33,7 @@ function FamilyCard({ userId }: { userId: string }) {
           enter this ID to give you app access. You&apos;ll see only what they choose to share.
         </p>
       </div>
-      <div className="ck-card space-y-3 p-5">
-        <p className="ck-label">Your CareKin ID</p>
-        <code className="block break-all rounded-lg bg-mint-soft px-3 py-3 text-[15px]">{userId}</code>
-        <Button
-          variant="secondary"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(userId);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
-            } catch {
-              toast.error("Copy failed. Select the ID and copy it.");
-            }
-          }}
-        >
-          {copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy ID"}
-        </Button>
-      </div>
+      <CareKinId id={userId} className="ck-card p-5" />
       <Button
         size="lg"
         className="w-full"
@@ -264,7 +246,7 @@ export function SetupFlow() {
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-card font-bold">First emergency contact</h2>
+          <h2 className="text-[17px] font-bold leading-6">First emergency contact</h2>
           <p className="ck-meta">Alerted by SMS when the crisis button is pressed. Optional now, important soon.</p>
         </div>
         <Field label="Name" htmlFor="contact_name" error={errors.contact_name}>
