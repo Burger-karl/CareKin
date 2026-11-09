@@ -101,7 +101,9 @@ async def test_register_again_before_verifying_replaces_details(api, db, sms):
 
 async def test_family_abroad_registers_themselves(api, latest_code):
     """Family who fund and follow care sign up as family_abroad, often on a foreign number."""
-    tokens = await signup(api, latest_code, phone="+44 7700 900123", role="family_abroad", name="Ada in London")
+    tokens = await signup(
+        api, latest_code, phone="+44 7700 900123", role="family_abroad", name="Ada in London"
+    )
     assert tokens["user"]["role"] == "family_abroad"
     assert tokens["user"]["phone"] == "+447700900123"
 
