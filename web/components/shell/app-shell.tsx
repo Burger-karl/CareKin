@@ -124,7 +124,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { me, patient } = useSession();
   const canSeePassport = me.role !== "family_abroad" || patient?.genotype != null;
   const sections = useMemo(() => sectionsFor(me.role, canSeePassport), [me.role, canSeePassport]);
-  // Family members who follow from abroad sign up as guardians, but only the patient or a guardian can start a crisis.
+  // Only the patient or their guardian can start a crisis; family followers (family_abroad, or older
+  // guardian accounts linked as family) only watch it.
   const showCrisis = (me.role === "patient" || me.role === "guardian") && !!patient && patient.access !== "family";
   const bookings = useBookings();
   const notices = useMemo(

@@ -18,7 +18,8 @@ export default function OnboardingPage() {
 
   if (!me.data) return <PageSpinner />;
   const role = me.data.role;
-  const who: WhoOption["id"] = role === "caregiver" ? "caregiver" : role === "patient" ? "myself" : "child";
+  const who: WhoOption["id"] =
+    role === "caregiver" ? "caregiver" : role === "patient" ? "myself" : role === "family_abroad" ? "family" : "child";
 
   async function submit({ consents }: ConsentResult) {
     setBusy(true);

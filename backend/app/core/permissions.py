@@ -50,9 +50,16 @@ ROLE_CODES: dict[UserRole, str] = {
 }
 
 # Roles a person can choose when signing up. Ops accounts are created by an admin
-# (seed script or the ops console), and family-abroad accounts wait for ON-5 (P1).
+# (seed script or the ops console). Family abroad sign up themselves and see a patient
+# only once that patient links them by CareKin ID (a FamilyLink with its share_scope).
 SELF_REGISTRATION_ROLES: frozenset[UserRole] = frozenset(
-    {UserRole.PATIENT, UserRole.GUARDIAN, UserRole.CAREGIVER, UserRole.FACILITY_ADMIN}
+    {
+        UserRole.PATIENT,
+        UserRole.GUARDIAN,
+        UserRole.FAMILY_ABROAD,
+        UserRole.CAREGIVER,
+        UserRole.FACILITY_ADMIN,
+    }
 )
 
 

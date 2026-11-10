@@ -115,8 +115,11 @@ export function RegisterFlow() {
       router.replace("/carer/apply");
     } else if (user.role === "facility_admin") {
       router.replace("/facility");
+    } else if (user.role === "family_abroad") {
+      // No care profile to create: the dashboard shows their CareKin ID until a patient links them.
+      router.replace("/dashboard");
     } else {
-      router.replace(choice.who.id === "family" ? "/setup?mode=family" : "/setup");
+      router.replace("/setup");
     }
     router.refresh();
   }

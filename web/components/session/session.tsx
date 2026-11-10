@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { LogoMark } from "@/components/brand";
 import { authApi } from "@/lib/api/client";
 import { useMe, usePatients } from "@/lib/api/queries";
+import { shouldSendToSetup } from "@/lib/setup";
 import { SKIP_SETUP_KEY } from "@/lib/storage";
 import type { Me, Patient, UserRole } from "@/lib/types";
 
@@ -75,21 +76,25 @@ export function SessionGate({ roles, children }: { roles: UserRole[]; children: 
   const wantsPatients = !!me.data && hasPatients(me.data.role);
   const patients = usePatients({ enabled: wantsPatients });
   const [selected, setSelected] = useState<string | null>(null);
-  const [skipSetup, setSkipSetup] = useState(false);
+  // null until sessionStorage has been read (after mount), so the setup redirect can't fire on a stale "false".
+  const [skipSetup, setSkipSetup] = useState<boolean | null>(null);
   const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
+    let skip = false;
     try {
       setSelected(localStorage.getItem(PATIENT_KEY));
-      setSkipSetup(sessionStorage.getItem(SKIP_SETUP_KEY) === "1");
+      skip = sessionStorage.getItem(SKIP_SETUP_KEY) === "1";
     } catch {
       /* private mode */
     }
+    setSkipSetup(skip);
   }, []);
 
   const role = me.data?.role;
   const missingConsent = !!me.data && me.data.consents.missing_required.length > 0;
-  const needsSetup = wantsPatients && patients.isSuccess && patients.data.length === 0 && me.data?.role !== "family_abroad" && !skipSetup;
+  const needsSetup =
+    !!role && wantsPatients && patients.isSuccess && shouldSendToSetup({ role, patientCount: patients.data.length, skipSetup });
 
   useEffect(() => {
     if (!role) return;
@@ -139,7 +144,12 @@ export function SessionGate({ roles, children }: { roles: UserRole[]; children: 
     );
   }
 
-  const waiting = !value || !roles.includes(value.me.role) || missingConsent || (wantsPatients && patients.isPending) || needsSetup;
+  const waiting =
+    !value ||
+    !roles.includes(value.me.role) ||
+    missingConsent ||
+    (wantsPatients && (patients.isPending || skipSetup === null)) ||
+    needsSetup;
   if (waiting) return <PageSpinner />;
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
