@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Phone } from "lucide-react";
 import { LogoFull } from "@/components/brand";
 import { Starburst } from "@/components/marketing/starburst";
+import { CONTACT, CONTACT_MAILTO, CONTACT_TEL } from "@/lib/contact";
 
 const COLUMNS = [
   {
@@ -10,6 +11,7 @@ const COLUMNS = [
       ["How it works", "/how-it-works"],
       ["About", "/about"],
       ["FAQs", "/faq"],
+      ["Privacy", "/privacy"],
     ],
   },
   {
@@ -20,10 +22,6 @@ const COLUMNS = [
       ["Sign in", "/login"],
       ["Create an account", "/register"],
     ],
-  },
-  {
-    title: "Legal",
-    links: [["Privacy", "/privacy"]],
   },
 ];
 
@@ -64,6 +62,20 @@ export function SiteFooter() {
                 </ul>
               </div>
             ))}
+            <div id="contact" className="col-span-2 sm:col-span-1">
+              <p className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wider text-white/50">
+                <Starburst className="size-3 text-[#F7B3A1]" /> Contact us
+              </p>
+              <address className="mt-4 space-y-3 text-[15px] not-italic text-white/85 [overflow-wrap:anywhere]">
+                <a href={CONTACT_MAILTO} className="block hover:text-white hover:underline">
+                  {CONTACT.email}
+                </a>
+                <a href={CONTACT_TEL} className="block hover:text-white hover:underline">
+                  {CONTACT.phone}
+                </a>
+                <p>{CONTACT.address}</p>
+              </address>
+            </div>
           </div>
         </div>
         <div className="mt-12 flex flex-col gap-3 border-t border-white/10 pt-6 text-[13px] text-white/55 md:flex-row md:items-center md:justify-between">

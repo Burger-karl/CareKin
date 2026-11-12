@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { api, errorMessage } from "@/lib/api/client";
 import { keys } from "@/lib/api/queries";
+import { CONTACT, CONTACT_MAILTO, CONTACT_TEL } from "@/lib/contact";
 import type { BookingMoney, PaymentVerify } from "@/lib/types";
 
 type View = { kind: "checking" } | { kind: "error"; message: string } | { kind: "done"; outcome: PaymentVerify["outcome"] };
@@ -75,6 +76,19 @@ export function PaymentReturn() {
         <p className="text-body text-muted-foreground">
           {view.kind === "checking" ? "This takes a few seconds." : view.kind === "error" ? view.message : copy!.body}
         </p>
+        {(view.kind === "error" || (view.kind === "done" && view.outcome === "needs_review")) && (
+          <p className="text-meta text-muted-foreground">
+            Need to reach us? Email{" "}
+            <a href={CONTACT_MAILTO} className="font-semibold text-teal underline">
+              {CONTACT.email}
+            </a>{" "}
+            or call{" "}
+            <a href={CONTACT_TEL} className="font-semibold text-teal underline">
+              {CONTACT.phone}
+            </a>
+            {bookingId ? ` and quote booking ${bookingId}.` : "."}
+          </p>
+        )}
         {bookingId && (
           <Button asChild className="mt-2">
             <Link href={`/bookings/${bookingId}`}>View booking</Link>

@@ -24,6 +24,13 @@
     -webkit-text-size-adjust: 100%;
   }
 
+  /* In-page links (the header's Contact item) glide instead of jumping. */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+
   body {
     @apply bg-background font-sans text-body text-foreground antialiased;
     -webkit-tap-highlight-color: transparent;

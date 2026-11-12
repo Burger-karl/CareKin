@@ -13,6 +13,7 @@ const NAV = [
   { href: "/about", label: "About" },
   { href: "/find-care", label: "Find a facility" },
   { href: "/faq", label: "FAQs" },
+  { href: "#contact", label: "Contact" },
 ];
 
 export function SiteHeader({ overDark = false }: { overDark?: boolean }) {
@@ -116,7 +117,11 @@ export function SiteHeader({ overDark = false }: { overDark?: boolean }) {
           <ul className="space-y-1">
             {NAV.map(({ href, label }) => (
               <li key={href}>
-                <Link href={href} className="block rounded-xl px-3 py-3 text-[17px] font-semibold text-ink hover:bg-white">
+                <Link
+                  href={href}
+                  onClick={() => setOpen(false)}
+                  className="block rounded-xl px-3 py-3 text-[17px] font-semibold text-ink hover:bg-white"
+                >
                   {label}
                 </Link>
               </li>

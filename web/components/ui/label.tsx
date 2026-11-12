@@ -24,7 +24,7 @@ function Field({
   label: string;
   htmlFor: string;
   error?: string | null;
-  hint?: string;
+  hint?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {

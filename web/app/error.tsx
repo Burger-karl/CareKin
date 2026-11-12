@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { CONTACT, CONTACT_MAILTO } from "@/lib/contact";
 
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
@@ -15,6 +16,12 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
         We hit a problem loading this page. If you are in a crisis, call 112 now.
       </p>
       <Button onClick={reset}>Try again</Button>
+      <p className="text-meta text-muted-foreground">
+        Still stuck? Email{" "}
+        <a href={CONTACT_MAILTO} className="font-semibold underline">
+          {CONTACT.email}
+        </a>
+      </p>
     </div>
   );
 }

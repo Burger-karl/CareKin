@@ -18,6 +18,7 @@ import { Field } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ApiError, api, errorMessage } from "@/lib/api/client";
 import { keys } from "@/lib/api/queries";
+import { CONTACT_MAILTO } from "@/lib/contact";
 import type { ConsentType, Me } from "@/lib/types";
 
 const CONSENTS: { type: ConsentType; title: string; body: string; required?: boolean; patientOnly?: boolean }[] = [
@@ -87,7 +88,19 @@ export function SettingsView() {
               <Field label="Full name" htmlFor="s-name" error={errors.full_name}>
                 <Input id="s-name" value={name} onChange={(e) => setName(e.target.value)} />
               </Field>
-              <Field label="Phone" htmlFor="s-phone" hint="Verified. Contact support to change it.">
+              <Field
+                label="Phone"
+                htmlFor="s-phone"
+                hint={
+                  <>
+                    Verified.{" "}
+                    <a href={CONTACT_MAILTO} className="font-semibold text-teal underline">
+                      Contact support
+                    </a>{" "}
+                    to change it.
+                  </>
+                }
+              >
                 <Input id="s-phone" value={me.phone} disabled />
               </Field>
               <Field label="Email (optional)" htmlFor="s-email" error={errors.email}>

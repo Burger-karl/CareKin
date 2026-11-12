@@ -4,6 +4,7 @@ import { FAQS, FaqList } from "@/components/marketing/faq";
 import { PageHero } from "@/components/marketing/page-hero";
 import { MarketingShell } from "@/components/marketing/shell";
 import { PillLink } from "@/components/marketing/ui";
+import { CONTACT, CONTACT_MAILTO, CONTACT_TEL } from "@/lib/contact";
 
 export const metadata: Metadata = { title: "FAQs" };
 
@@ -25,6 +26,17 @@ export default function Faq() {
             <FaqList items={FAQS.filter((f) => f.group === g)} />
           </Reveal>
         ))}
+        <p className="text-center text-[17px] text-ink/75">
+          Still have a question? Email{" "}
+          <a href={CONTACT_MAILTO} className="font-semibold text-ink underline">
+            {CONTACT.email}
+          </a>{" "}
+          or call{" "}
+          <a href={CONTACT_TEL} className="font-semibold text-ink underline">
+            {CONTACT.phone}
+          </a>
+          . This line is not for emergencies.
+        </p>
         <div className="flex flex-wrap justify-center gap-3 pt-4">
           <PillLink href="/register">Create a free account</PillLink>
           <PillLink href="/how-it-works" tone="outline">
