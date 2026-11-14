@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
-import { Starburst } from "@/components/marketing/starburst";
+import { ArrowUpRight, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /** Pill link with a round arrow badge on the right. */
@@ -59,7 +58,7 @@ export function Eyebrow({ children, light = false }: { children: React.ReactNode
         light ? "bg-white/10 text-white ring-1 ring-white/20" : "bg-white text-teal ring-1 ring-line",
       )}
     >
-      <Starburst className={light ? "text-[#F7B3A1]" : "text-[#E9785F]"} /> {children}
+      <span aria-hidden className={cn("size-1.5 rounded-full", light ? "bg-[#F7B3A1]" : "bg-[#E9785F]")} /> {children}
     </p>
   );
 }
@@ -104,7 +103,7 @@ export function Tick({ children, light = false }: { children: React.ReactNode; l
         )}
         aria-hidden
       >
-        <Starburst className="size-3.5" />
+        <Check className="size-3.5" strokeWidth={3} />
       </span>
       <span className={light ? "text-white/90" : "text-foreground/85"}>{children}</span>
     </li>

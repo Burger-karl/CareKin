@@ -1,5 +1,4 @@
-import { BadgeCheck, Check, Clock, FileText, Lock, MapPin, Navigation, ShieldCheck, Star, Zap } from "lucide-react";
-import { Starburst } from "@/components/marketing/starburst";
+import { BadgeCheck, Check, Clock, FileText, Heart, Lock, MapPin, Navigation, ShieldCheck, Star, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Small illustrations of the app, drawn in code. Example data only, never real people or records.
@@ -155,11 +154,11 @@ export function EscrowMock({ className }: { className?: string }) {
   );
 }
 
-/** A badge with the starburst, for floating over photos. */
+/** A badge with a small heart, for floating over photos. */
 export function FloatBadge({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <div className={cn("inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[14px] font-semibold shadow-xl shadow-black/10", className)}>
-      <Starburst className="size-4 text-[#E9785F]" /> {children}
+      <Heart className="size-4 fill-current text-[#E9785F]" aria-hidden /> {children}
     </div>
   );
 }

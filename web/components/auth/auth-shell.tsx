@@ -1,8 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Phone, ShieldCheck } from "lucide-react";
+import { Check, Phone, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/brand";
-import { Starburst } from "@/components/marketing/starburst";
 
 const POINTS = [
   "One press alerts your family and finds the nearest SCD facility",
@@ -60,7 +59,7 @@ export function AuthShell({ children, wide = false }: { children: React.ReactNod
         <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-[#0B2F2B] via-[#0B2F2B]/70 to-[#0B2F2B]/10" />
         <div className="relative">
           <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-1.5 text-[13px] font-semibold uppercase tracking-wider ring-1 ring-white/20">
-            <Starburst className="text-[#F7B3A1]" /> CareKin
+            <span aria-hidden className="size-1.5 rounded-full bg-[#F7B3A1]" /> CareKin
           </p>
           <h2 className="mt-5 max-w-md text-[40px] font-bold leading-[1.05] tracking-tight">
             Care that keeps up <span className="text-white/60">with sickle cell.</span>
@@ -69,7 +68,7 @@ export function AuthShell({ children, wide = false }: { children: React.ReactNod
             {POINTS.map((text) => (
               <li key={text} className="flex items-start gap-3 text-[15px] text-white/90">
                 <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-white/15" aria-hidden>
-                  <Starburst className="size-3.5" />
+                  <Check className="size-3.5" strokeWidth={3} />
                 </span>
                 {text}
               </li>

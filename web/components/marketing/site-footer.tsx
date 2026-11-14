@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Phone } from "lucide-react";
 import { LogoFull } from "@/components/brand";
-import { Starburst } from "@/components/marketing/starburst";
 import { CONTACT, CONTACT_MAILTO, CONTACT_TEL } from "@/lib/contact";
 
 const COLUMNS = [
@@ -48,9 +47,7 @@ export function SiteFooter() {
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
             {COLUMNS.map((col) => (
               <div key={col.title}>
-                <p className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wider text-white/50">
-                  <Starburst className="size-3 text-[#F7B3A1]" /> {col.title}
-                </p>
+                <p className="text-[13px] font-semibold uppercase tracking-wider text-white/50">{col.title}</p>
                 <ul className="mt-4 space-y-3">
                   {col.links.map(([label, href]) => (
                     <li key={href}>
@@ -63,9 +60,7 @@ export function SiteFooter() {
               </div>
             ))}
             <div id="contact" className="col-span-2 sm:col-span-1">
-              <p className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wider text-white/50">
-                <Starburst className="size-3 text-[#F7B3A1]" /> Contact us
-              </p>
+              <p className="text-[13px] font-semibold uppercase tracking-wider text-white/50">Contact us</p>
               <address className="mt-4 space-y-3 text-[15px] not-italic text-white/85 [overflow-wrap:anywhere]">
                 <a href={CONTACT_MAILTO} className="block hover:text-white hover:underline">
                   {CONTACT.email}

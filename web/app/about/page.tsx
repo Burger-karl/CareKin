@@ -3,17 +3,17 @@ import Image from "next/image";
 import { Reveal } from "@/components/landing/reveal";
 import { PageHero } from "@/components/marketing/page-hero";
 import { MarketingShell } from "@/components/marketing/shell";
-import { Starburst } from "@/components/marketing/starburst";
+import { BadgeCheck, Info, Lock, ShieldCheck } from "lucide-react";
 import { Eyebrow, PillLink, SectionTitle, Tick } from "@/components/marketing/ui";
 
 export const metadata: Metadata = { title: "About" };
 
 const VALUES = [
-  ["Safety first", "A crisis should never wait on a password or a code. Help comes first, paperwork later."],
-  ["Trust is earned", "Every caregiver is checked by a person before they can take a booking, and every payment waits in escrow."],
-  ["Your data is yours", "Health details are encrypted and shared only when you say so, for as long as you say."],
-  ["Honest about limits", "CareKin connects you to people and places. It never gives medical advice or replaces emergency care."],
-];
+  [ShieldCheck, "Safety first", "A crisis should never wait on a password or a code. Help comes first, paperwork later."],
+  [BadgeCheck, "Trust is earned", "Every caregiver is checked by a person before they can take a booking, and every payment waits in escrow."],
+  [Lock, "Your data is yours", "Health details are encrypted and shared only when you say so, for as long as you say."],
+  [Info, "Honest about limits", "CareKin connects you to people and places. It never gives medical advice or replaces emergency care."],
+] as const;
 
 export default function About() {
   return (
@@ -54,10 +54,10 @@ export default function About() {
             </SectionTitle>
           </Reveal>
           <ul className="mt-12 grid gap-5 md:grid-cols-2">
-            {VALUES.map(([t, b], i) => (
+            {VALUES.map(([Icon, t, b], i) => (
               <Reveal as="li" key={t} delay={i * 80}>
                 <div className="h-full rounded-[28px] bg-white/5 p-7 ring-1 ring-white/10">
-                  <Starburst className="size-7 text-[#F7B3A1]" />
+                  <Icon className="size-7 text-[#F7B3A1]" aria-hidden />
                   <h3 className="mt-4 text-[22px] font-bold">{t}</h3>
                   <p className="mt-2 text-[15px] leading-relaxed text-white/70">{b}</p>
                 </div>

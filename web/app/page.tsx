@@ -1,12 +1,11 @@
 import Image from "next/image";
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { HeartHandshake, Lock, MapPin, ShieldCheck, Users } from "lucide-react";
+import { BadgeCheck, Heart, HeartHandshake, Lock, MapPin, ShieldCheck, Users, Wallet } from "lucide-react";
 import { LandingCrisis } from "@/components/crisis/landing-crisis";
 import { FAQS, FaqList } from "@/components/marketing/faq";
 import { CaregiverMock, CrisisMock, EscrowMock, FacilityMock, FloatBadge, PassportMock } from "@/components/marketing/mocks";
 import { MarketingShell } from "@/components/marketing/shell";
-import { Starburst } from "@/components/marketing/starburst";
 import { Eyebrow, PillLink, SectionTitle, Tick } from "@/components/marketing/ui";
 import { Reveal } from "@/components/landing/reveal";
 
@@ -239,15 +238,17 @@ export default function Landing() {
               </SectionTitle>
             </Reveal>
             <ul className="mt-10 space-y-6">
-              {[
-                ["Vetted caregivers", "NIN, two guarantors, a background check and, for nurses, a verified licence. A person at CareKin approves every carer."],
-                ["Money held safely", "You pay into escrow when a carer accepts. The money is released only after the care is done."],
-                ["Your data, your call", "Your passport is encrypted. Every share has an end date, every view is logged, and consent follows the NDPA."],
-              ].map(([t, b], i) => (
+              {(
+                [
+                  [BadgeCheck, "Vetted caregivers", "NIN, two guarantors, a background check and, for nurses, a verified licence. A person at CareKin approves every carer."],
+                  [Wallet, "Money held safely", "You pay into escrow when a carer accepts. The money is released only after the care is done."],
+                  [Lock, "Your data, your call", "Your passport is encrypted. Every share has an end date, every view is logged, and consent follows the NDPA."],
+                ] as const
+              ).map(([Icon, t, b], i) => (
                 <Reveal as="li" key={t} delay={i * 100}>
                   <div className="flex gap-4">
                     <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white/10" aria-hidden>
-                      <Starburst className="size-6 text-[#F7B3A1]" />
+                      <Icon className="size-6 text-[#F7B3A1]" />
                     </span>
                     <div>
                       <h3 className="text-[20px] font-bold">{t}</h3>
@@ -269,7 +270,7 @@ export default function Landing() {
             </div>
             <div className="absolute -bottom-6 left-4 right-4 rounded-3xl bg-white p-5 text-ink shadow-2xl md:left-8 md:right-auto md:max-w-sm">
               <p className="flex items-center gap-2 text-[13px] font-semibold text-teal">
-                <Starburst className="size-4 text-[#E9785F]" /> Our promise
+                <Heart className="size-4 fill-current text-[#E9785F]" aria-hidden /> Our promise
               </p>
               <p className="mt-2 text-[16px] font-semibold leading-snug">
                 No one living with sickle cell should face a crisis alone, or wait on a login to get help.

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { CalendarDays, CheckCircle2, ChevronRight, Hourglass, Sparkles } from "lucide-react";
+import { Activity, CalendarDays, CheckCircle2, ChevronRight, Hourglass } from "lucide-react";
 import { Avatar, toneFor } from "@/components/brand";
 import { PageHeader } from "@/components/shell/app-shell";
 import { useSession } from "@/components/session/session";
@@ -67,7 +67,7 @@ export function BookingList() {
         <div className="mb-5 grid grid-cols-3 gap-3 lg:gap-5">
           {(
             [
-              ["Active", counts.active, Sparkles, "bg-mint text-teal"],
+              ["Active", counts.active, Activity, "bg-mint text-teal"],
               ["Waiting", counts.waiting, Hourglass, "bg-amber-soft text-amber-ink"],
               ["Done", counts.done, CheckCircle2, "bg-[#E4ECF8] text-[#2B4C84]"],
             ] as const

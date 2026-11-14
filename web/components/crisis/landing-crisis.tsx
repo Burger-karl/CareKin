@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MapPin, Phone, ShieldCheck, TriangleAlert, Zap } from "lucide-react";
 import { CrisisMap } from "@/components/crisis/crisis-map";
 import { FacilityCard, alertLabel } from "@/components/crisis/crisis-screen";
-import { Starburst } from "@/components/marketing/starburst";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ApiError, errorMessage } from "@/lib/api/client";
@@ -361,7 +360,7 @@ export function LandingCrisis({
           <span className="relative">
             {alertOpen ? "Crisis alert open" : enrolled ? (hold > 0 ? "Keep holding…" : "Hold for crisis help") : "Crisis help"}
           </span>
-          <Starburst className="relative size-5 transition-transform duration-700 group-hover:rotate-180" />
+          <Zap className="relative size-5" aria-hidden />
         </button>
 
         <Dialog
