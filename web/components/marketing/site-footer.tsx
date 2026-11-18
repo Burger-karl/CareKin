@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Phone } from "lucide-react";
 import { LogoFull } from "@/components/brand";
-import { CONTACT, CONTACT_MAILTO, CONTACT_TEL } from "@/lib/contact";
+import { COMPANY, CONTACT, CONTACT_MAILTO, CONTACT_TEL } from "@/lib/contact";
 
 const COLUMNS = [
   {
@@ -74,7 +74,10 @@ export function SiteFooter() {
           </div>
         </div>
         <div className="mt-12 flex flex-col gap-3 border-t border-white/10 pt-6 text-[13px] text-white/55 md:flex-row md:items-center md:justify-between">
-          <p>© {new Date().getFullYear()} CareKin. Consent is recorded under the Nigeria Data Protection Act.</p>
+          <p>
+            © {new Date().getFullYear()} CareKin, a product of {COMPANY.legalName}. Consent is recorded under the Nigeria
+            Data Protection Act.
+          </p>
           <p>CareKin is not an emergency service and does not give medical advice.</p>
         </div>
       </div>

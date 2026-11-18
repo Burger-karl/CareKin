@@ -8,5 +8,8 @@ export const CONTACT = {
   address: "714 Ekulu West, GRA, Enugu, Nigeria",
 } as const;
 
+/** The registered company behind CareKin, spelled as on its CAC certificate. */
+export const COMPANY = { legalName: "AfricaPlan Philanthropies Foundation" } as const;
+
 export const CONTACT_MAILTO = `mailto:${CONTACT.email}`;
 export const CONTACT_TEL = `tel:${CONTACT.phone}`;

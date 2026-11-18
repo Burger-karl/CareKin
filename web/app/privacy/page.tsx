@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/brand";
-import { CONTACT, CONTACT_MAILTO, CONTACT_TEL } from "@/lib/contact";
+import { COMPANY, CONTACT, CONTACT_MAILTO, CONTACT_TEL } from "@/lib/contact";
 
 export const metadata: Metadata = { title: "Privacy" };
 
@@ -20,8 +20,8 @@ export default function PrivacyPage() {
       <main className="mx-auto max-w-xl space-y-6 px-5 py-8">
         <h1 className="text-title font-bold">Privacy</h1>
         <p className="text-muted-foreground">
-          What CareKin collects, and why. Consent is recorded under the Nigeria Data Protection Act, and you can change it
-          any time in Settings.
+          What CareKin collects, and why. CareKin is a product of {COMPANY.legalName}. Consent is recorded under the
+          Nigeria Data Protection Act, and you can change it any time in Settings.
         </p>
         <dl className="space-y-5">
           {ITEMS.map(([t, b]) => (

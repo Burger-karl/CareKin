@@ -5,6 +5,7 @@ import { PageHero } from "@/components/marketing/page-hero";
 import { MarketingShell } from "@/components/marketing/shell";
 import { BadgeCheck, Info, Lock, ShieldCheck } from "lucide-react";
 import { Eyebrow, PillLink, SectionTitle, Tick } from "@/components/marketing/ui";
+import { COMPANY } from "@/lib/contact";
 
 export const metadata: Metadata = { title: "About" };
 
@@ -37,6 +38,7 @@ export default function About() {
             explaining a medical history from memory, or reaching the people who need to know. CareKin puts all of that
             behind one button.
           </p>
+          <p className="mt-4 text-[16px] leading-relaxed text-ink/70">CareKin is a product of {COMPANY.legalName}.</p>
           <ul className="mt-6 space-y-3">
             <Tick>One press alerts family, guardians and the caregiver on shift</Tick>
             <Tick>A health passport that travels with the patient</Tick>
