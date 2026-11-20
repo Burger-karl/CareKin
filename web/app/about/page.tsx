@@ -23,7 +23,7 @@ export default function About() {
         eyebrow="About CareKin"
         title="Carer and patient,"
         muted="together."
-        intro="CareKin is a care marketplace and safety layer for people living with sickle cell in Nigeria, their families near and far, and the caregivers who support them."
+        intro={`CareKin is a product of ${COMPANY.legalName}. It is a care marketplace and safety layer for people living with sickle cell in Nigeria, their families near and far, and the caregivers who support them.`}
       />
 
       <section className="mx-auto grid max-w-7xl gap-6 px-4 pb-16 md:px-6 lg:grid-cols-2">
@@ -38,7 +38,6 @@ export default function About() {
             explaining a medical history from memory, or reaching the people who need to know. CareKin puts all of that
             behind one button.
           </p>
-          <p className="mt-4 text-[16px] leading-relaxed text-ink/70">CareKin is a product of {COMPANY.legalName}.</p>
           <ul className="mt-6 space-y-3">
             <Tick>One press alerts family, guardians and the caregiver on shift</Tick>
             <Tick>A health passport that travels with the patient</Tick>

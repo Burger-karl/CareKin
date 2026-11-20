@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Golos_Text } from "next/font/google";
 import { Providers } from "@/components/providers";
+import { COMPANY } from "@/lib/contact";
 import "./globals.css";
 
 const golos = Golos_Text({ subsets: ["latin"], variable: "--font-body", display: "swap" });
@@ -10,6 +11,8 @@ export const metadata: Metadata = {
   title: { default: "CareKin", template: "%s · CareKin" },
   description: "Care marketplace and safety layer for people living with sickle cell disease.",
   applicationName: "CareKin",
+  creator: COMPANY.legalName,
+  publisher: COMPANY.legalName,
   manifest: "/manifest.webmanifest",
   robots: { index: false, follow: false },
 };

@@ -37,6 +37,7 @@ export function SiteFooter() {
               Carer and patient, together. Crisis help, a health passport and vetted caregivers for people living with
               sickle cell in Nigeria.
             </p>
+            <p className="mt-3 text-[15px] font-semibold text-white">A product of {COMPANY.legalName}.</p>
             <a
               href="tel:112"
               className="mt-6 inline-flex items-center gap-2 rounded-full bg-crisis px-5 py-3 font-bold text-white hover:brightness-110"
